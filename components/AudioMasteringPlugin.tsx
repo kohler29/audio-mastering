@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { Play, Pause, SkipBack, SkipForward, Settings, Save, Upload, Download, LogOut } from 'lucide-react';
 import { Waveform } from './audio/Waveform';
 import { SpectrumAnalyzer } from './audio/SpectrumAnalyzer';
@@ -247,6 +248,10 @@ export function AudioMasteringPlugin() {
       setMultibandEnabled(false);
     } catch (err) {
       console.error('Failed to load audio file:', err);
+      Sentry.captureException(err, {
+        tags: { component: 'AudioMasteringPlugin', action: 'loadAudioFile' },
+        extra: { fileName: file?.name, fileSize: file?.size, fileType: file?.type },
+      });
       const errorMessage = err instanceof Error ? err.message : 'Failed to load audio file';
       showToast(errorMessage, 'error');
       // Reset input on error
@@ -285,6 +290,10 @@ export function AudioMasteringPlugin() {
         }
       } catch (err) {
         console.error('Failed to load preset:', err);
+        Sentry.captureException(err, {
+          tags: { component: 'AudioMasteringPlugin', action: 'loadPreset' },
+          extra: { presetId },
+        });
         showToast('Failed to load preset', 'error');
       }
     } else {
@@ -425,6 +434,10 @@ export function AudioMasteringPlugin() {
       showToast(`Preset "${presetName}" saved successfully!`, 'success');
     } catch (err) {
       console.error('Failed to save preset:', err);
+      Sentry.captureException(err, {
+        tags: { component: 'AudioMasteringPlugin', action: 'savePreset' },
+        extra: { presetName, isPublic: presetIsPublic },
+      });
       showToast(err instanceof Error ? err.message : 'Failed to save preset', 'error');
     }
   };
@@ -459,6 +472,10 @@ export function AudioMasteringPlugin() {
       showToast(`Export successful! Audio exported as ${format.toUpperCase()} with ${quality} quality.`, 'success');
     } catch (err) {
       console.error('Export failed:', err);
+      Sentry.captureException(err, {
+        tags: { component: 'AudioMasteringPlugin', action: 'exportAudio' },
+        extra: { format, quality, audioFileName },
+      });
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       showToast(`Failed to export audio: ${errorMessage}. Please try again.`, 'error');
     }

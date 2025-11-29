@@ -89,6 +89,10 @@ export class AudioEngine {
   private saturationNode: WaveShaperNode | null = null;
   private saturationDryGain: GainNode | null = null;
   private saturationWetGain: GainNode | null = null;
+  // Saturation filtering nodes for professional analog modeling
+  private saturationDCBlocker: BiquadFilterNode | null = null;
+  private saturationPreEmphasis: BiquadFilterNode | null = null;
+  private saturationDeEmphasis: BiquadFilterNode | null = null;
   // Harmonizer nodes
   private harmonizerDelay1: DelayNode | null = null;
   private harmonizerDelay2: DelayNode | null = null;
@@ -158,17 +162,17 @@ export class AudioEngine {
   async initialize(): Promise<void> {
     try {
       this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      
+
       // Setup analyser terlebih dahulu
       this.setupAnalyser();
-      
+
       // Set up listener untuk state changes
       this.audioContext.addEventListener('statechange', () => {
         if (this.audioContext?.state === 'running') {
           console.log('Audio context is now running');
         }
       });
-      
+
       // Jangan menunggu resume() - langsung resolve untuk menghindari hang
       // Resume akan dilakukan nanti saat user interaction (melalui resumeContext())
       // Ini membuat initialization lebih cepat dan tidak blocking
@@ -180,7 +184,7 @@ export class AudioEngine {
           // Tidak perlu log karena ini normal behavior
         });
       }
-      
+
       // Langsung resolve tanpa menunggu resume()
       // Engine sudah siap digunakan, resume bisa dilakukan nanti
     } catch (error) {
@@ -233,7 +237,7 @@ export class AudioEngine {
       this.duration = this.audioBuffer.duration;
       this.pausedTime = 0;
       this.currentTime = 0;
-      
+
       // Reset graph built flag untuk rebuild graph dengan file baru
       this.audioGraphBuilt = false;
     } catch (error) {
@@ -265,11 +269,11 @@ export class AudioEngine {
     this.compressorNode.attack.value = settings.compressor.attack / 1000;
     this.compressorNode.release.value = settings.compressor.release / 1000;
     this.compressorNode.knee.value = 30;
-    
+
     // Compressor makeup gain
     this.compressorGainNode = this.audioContext.createGain();
     this.compressorGainNode.gain.value = this.dbToGain(settings.compressor.gain);
-    
+
     this.compressorMix = this.audioContext.createGain();
     this.compressorBypass = this.audioContext.createGain();
     this.compressorMix.gain.value = settings.compressor.enabled ? 1 : 0;
@@ -281,7 +285,7 @@ export class AudioEngine {
 
     // Saturation (using precomputed curve)
     this.createSaturationNode(settings.saturation);
-    
+
     this.saturationMix = this.audioContext.createGain();
     this.saturationBypass = this.audioContext.createGain();
     this.saturationMix.gain.value = settings.saturation.enabled ? 1 : 0;
@@ -302,7 +306,7 @@ export class AudioEngine {
     this.limiterNode.attack.value = 0.003; // 3ms - optimized to prevent distortion on transients
     this.limiterNode.release.value = 0.05; // 50ms - smoother release, prevents pumping
     this.limiterNode.knee.value = 0; // Hard knee for true limiting
-    
+
     this.limiterMix = this.audioContext.createGain();
     this.limiterBypass = this.audioContext.createGain();
     this.limiterMix.gain.value = settings.limiter.enabled ? 1 : 0;
@@ -324,12 +328,12 @@ export class AudioEngine {
     // Multiband Compressor - always route through multibandMix
     // This ensures routing is always correct even when enabled state changes
     let multibandInput: GainNode = this.gainNodes.input;
-    
+
     // Always create and connect multiband routing if nodes exist
     if (this.multibandMix && this.multibandBypass && this.multibandOutput) {
       // Always connect input to bypass path (bypass gain controls whether signal passes)
       this.gainNodes.input.connect(this.multibandBypass);
-      
+
       // Connect input to each band's highpass filter (if bands exist)
       // This ensures bands are always connected, even if disabled initially
       if (this.multibandFilters.length > 0) {
@@ -337,14 +341,14 @@ export class AudioEngine {
           this.gainNodes.input!.connect(filter.highpass);
         });
       }
-      
+
       // Always use multibandMix as output (it mixes bypass and multiband output)
       multibandInput = this.multibandMix;
     } else {
       // Fallback: if multiband nodes don't exist, use input directly
       multibandInput = this.gainNodes.input;
     }
-    
+
     // Compressor with bypass
     multibandInput.connect(this.compressorNode!);
     multibandInput.connect(this.compressorBypass!);
@@ -352,16 +356,16 @@ export class AudioEngine {
     this.compressorGainNode!.connect(this.compressorMix!);
     this.compressorMix!.connect(this.compressorOutput!);
     this.compressorBypass!.connect(this.compressorOutput!);
-    
+
     // Reverb in parallel dengan bypass
-    if (settings.reverb.enabled && 
-        this.reverbDelayNode && 
-        this.reverbGainNode && 
-        this.dryGainNode) {
+    if (settings.reverb.enabled &&
+      this.reverbDelayNode &&
+      this.reverbGainNode &&
+      this.dryGainNode) {
       // Connect input ke delay (untuk reverb) dan dry path
       this.compressorOutput!.connect(this.reverbDelayNode);
       this.compressorOutput!.connect(this.dryGainNode);
-      
+
       // Mix dry dan wet
       const reverbMixNode = this.audioContext.createGain();
       this.dryGainNode.connect(reverbMixNode);
@@ -374,15 +378,24 @@ export class AudioEngine {
     this.compressorOutput!.connect(this.reverbBypass!);
     this.reverbMix!.connect(this.reverbOutput!);
     this.reverbBypass!.connect(this.reverbOutput!);
-    
-    // Saturation with bypass
+
+    // Saturation with bypass and professional filtering
     const saturationInput = this.reverbOutput!;
-    if (this.saturationNode && this.saturationWetGain && this.saturationDryGain) {
-      // Connect input to saturation node and dry path
-      saturationInput.connect(this.saturationNode);
+    if (this.saturationNode && this.saturationWetGain && this.saturationDryGain &&
+      this.saturationDCBlocker && this.saturationPreEmphasis && this.saturationDeEmphasis) {
+      // Professional saturation signal chain:
+      // Input → DC Blocker → Pre-emphasis → Saturation → De-emphasis → Wet Gain
+
+      // Connect dry path (bypass saturation processing)
       saturationInput.connect(this.saturationDryGain);
-      this.saturationNode.connect(this.saturationWetGain);
-      
+
+      // Connect wet path with full processing chain
+      saturationInput.connect(this.saturationDCBlocker);
+      this.saturationDCBlocker.connect(this.saturationPreEmphasis);
+      this.saturationPreEmphasis.connect(this.saturationNode);
+      this.saturationNode.connect(this.saturationDeEmphasis);
+      this.saturationDeEmphasis.connect(this.saturationWetGain);
+
       // Mix wet and dry signals using GainNode (not ChannelMerger)
       const saturationMixNode = this.audioContext.createGain();
       this.saturationWetGain.connect(saturationMixNode);
@@ -394,26 +407,26 @@ export class AudioEngine {
     saturationInput.connect(this.saturationBypass!);
     this.saturationMix!.connect(this.saturationOutput!);
     this.saturationBypass!.connect(this.saturationOutput!);
-    
+
     // Harmonizer with bypass (delay-based chorus effect)
-    if (settings.harmonizer.enabled && 
-        this.harmonizerDelay1 && 
-        this.harmonizerDelay2 && 
-        this.harmonizerDryGain && 
-        this.harmonizerWetGain &&
-        this.harmonizerToneFilter) {
+    if (settings.harmonizer.enabled &&
+      this.harmonizerDelay1 &&
+      this.harmonizerDelay2 &&
+      this.harmonizerDryGain &&
+      this.harmonizerWetGain &&
+      this.harmonizerToneFilter) {
       // Connect input to delays and dry path
       this.saturationOutput!.connect(this.harmonizerDelay1);
       this.saturationOutput!.connect(this.harmonizerDelay2);
       this.saturationOutput!.connect(this.harmonizerDryGain);
-      
+
       // Process delayed signals through tone filter (sum both delays)
       const delaySum = this.audioContext.createGain();
       this.harmonizerDelay1.connect(delaySum);
       this.harmonizerDelay2.connect(delaySum);
       delaySum.connect(this.harmonizerToneFilter);
       this.harmonizerToneFilter.connect(this.harmonizerWetGain);
-      
+
       // Mix dry and wet
       const harmonizerMixNode = this.audioContext.createGain();
       this.harmonizerDryGain.connect(harmonizerMixNode);
@@ -425,19 +438,19 @@ export class AudioEngine {
     this.saturationOutput!.connect(this.harmonizerBypass!);
     this.harmonizerMix!.connect(this.harmonizerOutput!);
     this.harmonizerBypass!.connect(this.harmonizerOutput!);
-    
+
     // Stereo Width - always route through stereo processing if stereo audio
     // This ensures routing is always correct even when enabled state changes
     let stereoInput: GainNode = this.harmonizerOutput!;
-    
+
     // Only apply stereo width if audio is stereo (2+ channels)
-    if (this.audioBuffer && 
-        this.audioBuffer.numberOfChannels >= 2 && 
-        this.splitterNode && 
-        this.mergerNode) {
+    if (this.audioBuffer &&
+      this.audioBuffer.numberOfChannels >= 2 &&
+      this.splitterNode &&
+      this.mergerNode) {
       // Always connect harmonizer output to splitter (routing always ready)
       this.harmonizerOutput!.connect(this.splitterNode);
-      
+
       // Create gain nodes for proper stereo width processing (save as instance variables)
       // These are created once and reused
       if (!this.stereoLeftDirect) {
@@ -445,13 +458,13 @@ export class AudioEngine {
         this.stereoRightDirect = this.audioContext.createGain();
         this.stereoLeftCrossfeed = this.audioContext.createGain();
         this.stereoRightCrossfeed = this.audioContext.createGain();
-        
+
         // Connect splitter to gains (always connected)
         this.splitterNode.connect(this.stereoLeftDirect, 0); // L -> leftDirect
         this.splitterNode.connect(this.stereoRightDirect, 1); // R -> rightDirect
         this.splitterNode.connect(this.stereoLeftCrossfeed, 1); // R -> leftCrossfeed
         this.splitterNode.connect(this.stereoRightCrossfeed, 0); // L -> rightCrossfeed
-        
+
         // Sum left and right channels
         const leftSum = this.audioContext.createGain();
         const rightSum = this.audioContext.createGain();
@@ -459,37 +472,37 @@ export class AudioEngine {
         this.stereoLeftCrossfeed.connect(leftSum);
         this.stereoRightDirect.connect(rightSum);
         this.stereoRightCrossfeed.connect(rightSum);
-        
+
         // Merge back to stereo
         leftSum.connect(this.mergerNode, 0, 0);
         rightSum.connect(this.mergerNode, 0, 1);
-        
+
         this.stereoOutput = this.audioContext.createGain();
         this.mergerNode.connect(this.stereoOutput);
       }
-      
+
       // Proper stereo width formula:
       // L' = L * (1 + width)/2 + R * (1 - width)/2
       // R' = R * (1 + width)/2 + L * (1 - width)/2
       // Width = 0: mono (L+R)/2, Width = 1: original, Width > 1: wider
       const width = settings.stereoWidth.width / 100;
-      
+
       // Update gain values based on enabled state and width
-      if (settings.stereoWidth.enabled && this.stereoLeftDirect && this.stereoRightDirect && 
-          this.stereoLeftCrossfeed && this.stereoRightCrossfeed) {
+      if (settings.stereoWidth.enabled && this.stereoLeftDirect && this.stereoRightDirect &&
+        this.stereoLeftCrossfeed && this.stereoRightCrossfeed) {
         // Direct signal gains
         this.stereoLeftDirect.gain.value = (1 + width) / 2;
         this.stereoRightDirect.gain.value = (1 + width) / 2;
         // Crossfeed gains (opposite channel)
         this.stereoLeftCrossfeed.gain.value = (1 - width) / 2; // R -> L
         this.stereoRightCrossfeed.gain.value = (1 - width) / 2; // L -> R
-        
+
         // Use stereo output
         stereoInput = this.stereoOutput!;
       } else {
         // When disabled, set gains to pass-through (width = 1, no crossfeed)
-        if (this.stereoLeftDirect && this.stereoRightDirect && 
-            this.stereoLeftCrossfeed && this.stereoRightCrossfeed) {
+        if (this.stereoLeftDirect && this.stereoRightDirect &&
+          this.stereoLeftCrossfeed && this.stereoRightCrossfeed) {
           this.stereoLeftDirect.gain.value = 1;
           this.stereoRightDirect.gain.value = 1;
           this.stereoLeftCrossfeed.gain.value = 0;
@@ -499,14 +512,14 @@ export class AudioEngine {
         stereoInput = this.stereoOutput || this.harmonizerOutput!;
       }
     }
-    
+
     // Limiter with bypass
     stereoInput.connect(this.limiterNode!);
     stereoInput.connect(this.limiterBypass!);
     this.limiterNode!.connect(this.limiterMix!);
     this.limiterMix!.connect(this.limiterOutput!);
     this.limiterBypass!.connect(this.limiterOutput!);
-    
+
     this.limiterOutput!.connect(this.gainNodes.output!);
 
     // Connect to analyser and destination
@@ -538,7 +551,7 @@ export class AudioEngine {
 
     this.sourceNode = this.audioContext.createBufferSource();
     this.sourceNode.buffer = this.audioBuffer;
-    
+
     // Connect source ke input gain (graph sudah terhubung)
     this.sourceNode.connect(this.gainNodes.input!);
 
@@ -596,7 +609,7 @@ export class AudioEngine {
     this.reverbMix.gain.value = settings.enabled ? 1 : 0;
     this.reverbBypass.gain.value = settings.enabled ? 0 : 1;
     this.reverbOutput = this.audioContext.createGain();
-    
+
     // Update current settings
     this.currentSettings.reverb = { ...settings };
   }
@@ -606,68 +619,157 @@ export class AudioEngine {
       throw new Error('Audio context not initialized');
     }
 
+    // Create DC blocking filter (highpass at 20Hz)
+    // This removes DC offset that can be introduced by saturation
+    this.saturationDCBlocker = this.audioContext.createBiquadFilter();
+    this.saturationDCBlocker.type = 'highpass';
+    this.saturationDCBlocker.frequency.value = 20;
+    this.saturationDCBlocker.Q.value = 0.707; // Butterworth response
+
+    // Create pre-emphasis filter for tape mode
+    // Boosts high frequencies before saturation (like real tape machines)
+    this.saturationPreEmphasis = this.audioContext.createBiquadFilter();
+    this.saturationPreEmphasis.type = 'highshelf';
+    this.saturationPreEmphasis.frequency.value = 3000; // 3kHz
+    this.saturationPreEmphasis.Q.value = 0.707;
+
+    // Create de-emphasis filter for tape mode
+    // Cuts high frequencies after saturation to compensate pre-emphasis
+    this.saturationDeEmphasis = this.audioContext.createBiquadFilter();
+    this.saturationDeEmphasis.type = 'lowshelf';
+    this.saturationDeEmphasis.frequency.value = 3000; // 3kHz
+    this.saturationDeEmphasis.Q.value = 0.707;
+
+    // Set pre/de-emphasis gains based on mode
+    if (settings.mode === 'tape') {
+      // Tape mode: use pre/de-emphasis for authentic tape sound
+      this.saturationPreEmphasis.gain.value = 6; // +6dB boost
+      this.saturationDeEmphasis.gain.value = -6; // -6dB cut
+    } else {
+      // Other modes: bypass pre/de-emphasis
+      this.saturationPreEmphasis.gain.value = 0;
+      this.saturationDeEmphasis.gain.value = 0;
+    }
+
     this.saturationNode = this.audioContext.createWaveShaper();
     const drive = settings.drive / 100;
     const bias = settings.bias / 100;
     const curve = new Float32Array(65536);
 
+    // Calculate auto gain compensation based on drive amount
+    // Higher drive = more gain reduction needed to maintain perceived loudness
+    const autoGainCompensation = 1 / (1 + drive * 0.5);
+
     for (let i = 0; i < 65536; i++) {
       const x = (i - 32768) / 32768;
       let saturated: number;
-      
-      // Analog saturation with proper non-linear transfer functions
+
+      // Professional analog saturation modeling with improved transfer functions
       switch (settings.mode) {
         case 'tube':
-          // Tube saturation: tanh (transistor/tube)
-          // Warm, high harmonics
-          // tanh provides smooth saturation with even harmonics
-          const tubeGain = 1 + drive * 3.0; // Higher gain for more harmonics
-          saturated = Math.tanh(x * tubeGain);
-          // Add bias for DC offset (tube characteristic)
+          // Tube/Valve saturation modeling (Triode/Pentode characteristic)
+          // Asymmetric soft clipping with even and odd harmonics
+          // Models classic tube warmth with smooth compression
+          const tubeGain = 1 + drive * 4.0; // Increased range for more character
+          const tubeInput = x * tubeGain;
+
+          // Asymmetric tube transfer function (models grid current)
+          // Positive half: softer saturation (triode characteristic)
+          // Negative half: harder saturation (asymmetric clipping)
+          if (tubeInput >= 0) {
+            // Positive: smooth tanh with slight compression
+            saturated = Math.tanh(tubeInput * 0.9) * 1.05;
+          } else {
+            // Negative: harder clipping (asymmetric)
+            saturated = Math.tanh(tubeInput * 1.1) * 0.95;
+          }
+
+          // Add harmonic richness with subtle second-order distortion
+          saturated += Math.sin(tubeInput * Math.PI * 0.5) * 0.05 * drive;
+
+          // Tube bias (DC offset) - characteristic of tube circuits
+          saturated += bias * 0.12;
+          break;
+
+        case 'tape':
+          // Analog tape saturation modeling (based on magnetic hysteresis)
+          // Smooth compression with tape-like warmth and high-frequency rolloff
+          const tapeGain = 1 + drive * 3.5;
+          const tapeInput = x * tapeGain;
+
+          // Tape hysteresis curve (S-curve with smooth compression)
+          // Uses modified arctan for tape-like response
+          const tapeBase = (2 / Math.PI) * Math.atan(tapeInput * Math.PI / 2);
+
+          // Add tape compression characteristic (soft knee)
+          const tapeCompression = tapeInput / (1 + Math.abs(tapeInput) * 0.5);
+
+          // Blend for realistic tape response
+          saturated = tapeBase * 0.7 + tapeCompression * 0.3;
+
+          // Add subtle third-harmonic for tape warmth
+          saturated += Math.sin(tapeInput * Math.PI) * 0.03 * drive;
+
+          // Tape bias (pre-magnetization)
           saturated += bias * 0.1;
           break;
-          
-        case 'tape':
-          // Tape saturation: arctan
-          // Low-mid bump, smooth high-end
-          // arctan provides smooth saturation with tape-like characteristics
-          const tapeGain = 1 + drive * 2.5;
-          saturated = (2 / Math.PI) * Math.atan(x * tapeGain * Math.PI / 2);
-          // Add slight bias for tape warmth
-          saturated += bias * 0.08;
-          break;
-          
+
         case 'soft':
         default:
-          // Soft saturation: polynomial (Neve, API, SSL style)
-          // Natural, non-aggressive
-          // Polynomial soft clipping: 3x - x^3 for smooth saturation
-          const softGain = 1 + drive * 2.0;
+          // Soft saturation: Console-style (Neve/API/SSL modeling)
+          // Natural, musical saturation with minimal artifacts
+          // Uses optimized polynomial for smooth, transparent saturation
+          const softGain = 1 + drive * 2.5;
           const input = x * softGain;
-          // Soft clipping polynomial: smooth, natural saturation
-          if (Math.abs(input) <= 1) {
-            saturated = input - (input * input * input) / 3;
+
+          // Improved soft clipping polynomial with better harmonic structure
+          // Uses Chebyshev polynomial approximation for smooth saturation
+          if (Math.abs(input) <= 0.5) {
+            // Linear region (no saturation)
+            saturated = input;
+          } else if (Math.abs(input) <= 1.0) {
+            // Soft knee region (smooth transition)
+            const sign = Math.sign(input);
+            const absInput = Math.abs(input);
+            // Smooth polynomial: 1.5x - 0.5x^3
+            saturated = sign * (1.5 * absInput - 0.5 * absInput * absInput * absInput);
           } else {
-            // Clamp beyond threshold
-            saturated = Math.sign(input) * (2 / 3);
+            // Hard limit region (gentle clipping)
+            saturated = Math.sign(input) * 0.875; // Slightly below 1.0 for headroom
           }
+
+          // Add subtle harmonic enhancement (console-style)
+          saturated += Math.sin(input * Math.PI * 0.3) * 0.02 * drive;
+
           // Minimal bias for natural sound
-          saturated += bias * 0.05;
+          saturated += bias * 0.06;
           break;
       }
-      
+
+      // Apply auto gain compensation to maintain perceived loudness
+      saturated *= autoGainCompensation;
+
       // Clamp to [-1, 1] to prevent clipping and NaN
-      curve[i] = Math.max(-1, Math.min(1, saturated));
+      // Use slightly softer limit to prevent harsh digital clipping
+      curve[i] = Math.max(-0.98, Math.min(0.98, saturated));
     }
 
     this.saturationNode.curve = curve;
+    // Use 4x oversampling to reduce aliasing artifacts
+    // This is crucial for high-quality analog modeling
     this.saturationNode.oversample = '4x';
 
-    // Mix control
+    // Mix control with proper gain staging
     this.saturationDryGain = this.audioContext.createGain();
     this.saturationWetGain = this.audioContext.createGain();
-    this.saturationDryGain.gain.value = 1 - (settings.mix / 100);
-    this.saturationWetGain.gain.value = settings.mix / 100;
+
+    // Equal-power crossfade for smooth mixing
+    const mixValue = settings.mix / 100;
+    const dryGain = Math.cos(mixValue * Math.PI / 2);
+    const wetGain = Math.sin(mixValue * Math.PI / 2);
+
+    this.saturationDryGain.gain.value = dryGain;
+    this.saturationWetGain.gain.value = wetGain;
 
     return this.saturationNode;
   }
@@ -678,62 +780,62 @@ export class AudioEngine {
     // Harmonizer menggunakan delay-based chorus effect
     // Depth mengontrol modulasi depth, mix mengontrol wet/dry mix
     // Tone mengontrol filter frequency untuk tone shaping
-    
+
     // Base delay time (sekitar 5-20ms untuk chorus effect)
     const baseDelay = 0.010; // 10ms
-    
+
     // Create two delay lines dengan LFO modulation untuk chorus effect
     this.harmonizerDelay1 = this.audioContext.createDelay(0.05);
     this.harmonizerDelay2 = this.audioContext.createDelay(0.05);
     this.harmonizerDelay1.delayTime.value = baseDelay;
     this.harmonizerDelay2.delayTime.value = baseDelay * 1.5; // Slightly different delay
-    
+
     // LFO untuk modulasi delay time (chorus effect)
     this.harmonizerLFO1 = this.audioContext.createOscillator();
     this.harmonizerLFO1.type = 'sine';
     this.harmonizerLFO1.frequency.value = 0.5 + (settings.depth / 100 * 2); // 0.5-2.5 Hz
-    
+
     this.harmonizerLFO2 = this.audioContext.createOscillator();
     this.harmonizerLFO2.type = 'sine';
     this.harmonizerLFO2.frequency.value = 0.7 + (settings.depth / 100 * 1.8); // Slightly different frequency
-    
+
     // LFO gain untuk modulasi depth
     const modulationDepth = (settings.depth / 100) * 0.005; // Max 5ms modulation
     this.harmonizerLFOGain1 = this.audioContext.createGain();
     this.harmonizerLFOGain1.gain.value = modulationDepth;
     this.harmonizerLFOGain2 = this.audioContext.createGain();
     this.harmonizerLFOGain2.gain.value = modulationDepth;
-    
+
     // Connect LFO to delay time modulation
     this.harmonizerLFO1.connect(this.harmonizerLFOGain1);
     this.harmonizerLFO2.connect(this.harmonizerLFOGain2);
     this.harmonizerLFOGain1.connect(this.harmonizerDelay1.delayTime);
     this.harmonizerLFOGain2.connect(this.harmonizerDelay2.delayTime);
-    
+
     // Start LFO oscillators
     this.harmonizerLFO1.start();
     this.harmonizerLFO2.start();
-    
+
     // Tone filter untuk tone shaping
     this.harmonizerToneFilter = this.audioContext.createBiquadFilter();
     this.harmonizerToneFilter.type = 'peaking';
     this.harmonizerToneFilter.frequency.value = 2000 + (settings.tone / 100 * 3000); // 2-5kHz
     this.harmonizerToneFilter.Q.value = 1;
     this.harmonizerToneFilter.gain.value = settings.tone / 10; // -10 to +10 dB
-    
+
     // Dry/wet mix
     this.harmonizerDryGain = this.audioContext.createGain();
     this.harmonizerWetGain = this.audioContext.createGain();
     this.harmonizerDryGain.gain.value = 1 - (settings.mix / 100);
     this.harmonizerWetGain.gain.value = settings.mix / 100;
-    
+
     // Bypass nodes
     this.harmonizerMix = this.audioContext.createGain();
     this.harmonizerBypass = this.audioContext.createGain();
     this.harmonizerMix.gain.value = settings.enabled ? 1 : 0;
     this.harmonizerBypass.gain.value = settings.enabled ? 0 : 1;
     this.harmonizerOutput = this.audioContext.createGain();
-    
+
     // Update current settings
     this.currentSettings.harmonizer = { ...settings };
   }
@@ -748,15 +850,15 @@ export class AudioEngine {
     this.mergerNode = this.audioContext.createChannelMerger(2);
 
     const widthGain = width / 100;
-    
+
     // Create gain nodes for mid and side
     this.stereoMidGain = this.audioContext.createGain();
     this.stereoSideGain = this.audioContext.createGain();
-    
+
     // Mid stays constant (1.0), side is adjusted by width
     this.stereoMidGain.gain.value = 1.0;
     this.stereoSideGain.gain.value = widthGain;
-    
+
     // Note: Actual mid-side matrix will be implemented in connectAudioGraph
     // using ScriptProcessorNode or AudioWorklet would be ideal, but for now
     // we'll use a simplified approach with gain adjustments
@@ -782,7 +884,7 @@ export class AudioEngine {
 
     // Check if there are any active bands
     const hasActiveBands = settings.bands.length > 0 && settings.bands.some(band => band.active);
-    
+
     // Set bypass/output gains based on enabled state and active bands
     // When enabled with active bands, use multiband output
     // Otherwise, use bypass to prevent silence
@@ -793,7 +895,7 @@ export class AudioEngine {
       this.multibandBypass.gain.value = 1;
       this.multibandOutput.gain.value = 0;
     }
-    
+
     // Always create bands structure (even if disabled) so routing is ready when enabled
 
     // Create filter and compressor for each band
@@ -828,7 +930,7 @@ export class AudioEngine {
       highpass.connect(lowpass);
       lowpass.connect(compressor);
       compressor.connect(gain);
-      
+
       // Connect each band output to multiband output (sum all bands)
       gain.connect(this.multibandOutput!);
 
@@ -840,7 +942,7 @@ export class AudioEngine {
     if (!this.audioContext || !this.audioBuffer) {
       throw new Error('Audio not loaded');
     }
-    
+
     // Reset loudness meter when starting playback
     this.resetLoudnessMeter();
 
@@ -868,7 +970,7 @@ export class AudioEngine {
 
     this.sourceNode = this.audioContext.createBufferSource();
     this.sourceNode.buffer = this.audioBuffer;
-    
+
     // Connect source ke input gain (graph sudah terhubung)
     this.sourceNode.connect(this.gainNodes.input!);
 
@@ -999,7 +1101,7 @@ export class AudioEngine {
       if (!this.audioContext || !this.isPlaying) return;
 
       this.currentTime = this.audioContext.currentTime - this.startTime + this.pausedTime;
-      
+
       if (this.currentTime >= this.duration) {
         this.stop();
         return;
@@ -1031,13 +1133,13 @@ export class AudioEngine {
     const channelData = this.audioBuffer.getChannelData(0); // Use first channel
     const length = channelData.length;
     const samplesPerPixel = Math.floor(length / width);
-    
+
     // Downsample untuk performa
     const waveform = new Float32Array(width);
     for (let i = 0; i < width; i++) {
       const start = i * samplesPerPixel;
       const end = Math.min(start + samplesPerPixel, length);
-      
+
       // Get peak value in this range
       let max = 0;
       for (let j = start; j < end; j++) {
@@ -1155,10 +1257,10 @@ export class AudioEngine {
     }
 
     const sampleRate = this.audioContext.sampleRate;
-    
+
     // Add to buffer for time-windowed calculations
     this.loudnessBuffer.push(new Float32Array(data));
-    
+
     // Keep only recent buffers (last 3 seconds at 48kHz = ~144k samples)
     const maxBuffers = Math.ceil((3 * sampleRate) / data.length);
     if (this.loudnessBuffer.length > maxBuffers) {
@@ -1179,7 +1281,7 @@ export class AudioEngine {
         }
       }
     }
-    
+
     // Convert to dBTP (True Peak in dB)
     const truePeakDb = 20 * Math.log10(Math.max(0.0001, truePeak));
     if (truePeakDb > this.truePeakMax) {
@@ -1190,27 +1292,27 @@ export class AudioEngine {
     // K-weighting: high-shelf at 1.5kHz with +4dB gain
     let sumSquares = 0;
     let sampleCount = 0;
-    
+
     for (let i = 0; i < data.length; i++) {
       const sample = data[i];
       // Simplified K-weighting: boost high frequencies
       // Real implementation would use proper IIR filter
       const freq = (i * sampleRate) / (data.length * 2);
       let weighted = sample;
-      
+
       // Approximate high-shelf boost at 1.5kHz
       if (freq > 1500) {
         const boost = 1 + (freq - 1500) / 10000; // Approximate boost
         weighted = sample * Math.min(boost, 1.58); // +4dB = ~1.58x
       }
-      
+
       sumSquares += weighted * weighted;
       sampleCount++;
     }
-    
+
     const rms = Math.sqrt(sumSquares / sampleCount);
     const power = rms * rms;
-    
+
     // Convert to LUFS (Loudness Units relative to Full Scale)
     // LUFS = -0.691 + 10 * log10(power) for K-weighted signal
     const lufs = -0.691 + 10 * Math.log10(Math.max(0.0000001, power));
@@ -1220,52 +1322,52 @@ export class AudioEngine {
     const shortTermWindow = 3.0; // 3 seconds
     const samplesPerBuffer = data.length;
     const timePerBuffer = samplesPerBuffer / sampleRate;
-    
+
     // Add to momentary buffer (400ms window)
     this.momentaryBuffer.push(lufs);
     const momentarySamples = Math.ceil(momentaryWindow / timePerBuffer);
     if (this.momentaryBuffer.length > momentarySamples) {
       this.momentaryBuffer.shift();
     }
-    
+
     // Add to short-term buffer (3s window)
     this.shortTermBuffer.push(lufs);
     const shortTermSamples = Math.ceil(shortTermWindow / timePerBuffer);
     if (this.shortTermBuffer.length > shortTermSamples) {
       this.shortTermBuffer.shift();
     }
-    
+
     // Integrated loudness (overall, with gating)
     if (this.loudnessStartTime === null) {
       this.loudnessStartTime = this.audioContext.currentTime;
     }
-    
+
     // Only add to integrated if above absolute threshold (-70 LUFS)
     if (lufs > -70) {
       this.integratedSamples.push(lufs);
       this.loudnessHistory.push(lufs);
-      
+
       // Keep history for LRA calculation (last 20 seconds)
       const maxHistorySamples = Math.ceil((20 * sampleRate) / samplesPerBuffer);
       if (this.loudnessHistory.length > maxHistorySamples) {
         this.loudnessHistory.shift();
       }
     }
-    
+
     // Calculate momentary (400ms average)
     let momentary = -23;
     if (this.momentaryBuffer.length > 0) {
       const sum = this.momentaryBuffer.reduce((a, b) => a + b, 0);
       momentary = sum / this.momentaryBuffer.length;
     }
-    
+
     // Calculate short-term (3s average)
     let shortTerm = -23;
     if (this.shortTermBuffer.length > 0) {
       const sum = this.shortTermBuffer.reduce((a, b) => a + b, 0);
       shortTerm = sum / this.shortTermBuffer.length;
     }
-    
+
     // Calculate integrated (overall average with gating)
     let integrated = -23;
     if (this.integratedSamples.length > 0) {
@@ -1273,7 +1375,7 @@ export class AudioEngine {
       const ungatedSum = this.integratedSamples.reduce((a, b) => a + b, 0);
       const ungatedLoudness = ungatedSum / this.integratedSamples.length;
       const gateThreshold = ungatedLoudness - 10;
-      
+
       const gatedSamples = this.integratedSamples.filter(l => l >= gateThreshold);
       if (gatedSamples.length > 0) {
         const gatedSum = gatedSamples.reduce((a, b) => a + b, 0);
@@ -1282,7 +1384,7 @@ export class AudioEngine {
         integrated = ungatedLoudness;
       }
     }
-    
+
     // Calculate LRA (Loudness Range) - 10th to 95th percentile
     let lra = 0;
     if (this.loudnessHistory.length > 100) {
@@ -1408,60 +1510,85 @@ export class AudioEngine {
 
     // Update saturation parameters
     if (settings.saturation && this.saturationNode) {
-      if (settings.saturation.drive !== undefined || 
-          settings.saturation.bias !== undefined || 
-          settings.saturation.mode !== undefined) {
+      if (settings.saturation.drive !== undefined ||
+        settings.saturation.bias !== undefined ||
+        settings.saturation.mode !== undefined) {
         const drive = (settings.saturation.drive ?? this.currentSettings.saturation.drive);
         const bias = (settings.saturation.bias ?? this.currentSettings.saturation.bias);
         const mode = (settings.saturation.mode ?? this.currentSettings.saturation.mode);
         const cacheKey = `${mode}_${Math.round(drive)}_${Math.round(bias)}`;
         let curve = this.saturationCurveCache.get(cacheKey);
-        
+
         if (!curve) {
           const driveValue = drive / 100;
           const biasValue = bias / 100;
           curve = new Float32Array(65536);
+
+          // Calculate auto gain compensation
+          const autoGainCompensation = 1 / (1 + driveValue * 0.5);
+
           for (let i = 0; i < 65536; i++) {
             const x = (i - 32768) / 32768;
             let saturated: number;
-            
-            // Analog saturation with proper non-linear transfer functions
+
+            // Professional analog saturation modeling (same as createSaturationNode)
             switch (mode) {
               case 'tube':
-                // Tube saturation: tanh (transistor/tube)
-                // Warm, high harmonics
-                const tubeGain = 1 + driveValue * 3.0;
-                saturated = Math.tanh(x * tubeGain);
+                // Tube/Valve saturation modeling
+                const tubeGain = 1 + driveValue * 4.0;
+                const tubeInput = x * tubeGain;
+
+                if (tubeInput >= 0) {
+                  saturated = Math.tanh(tubeInput * 0.9) * 1.05;
+                } else {
+                  saturated = Math.tanh(tubeInput * 1.1) * 0.95;
+                }
+
+                saturated += Math.sin(tubeInput * Math.PI * 0.5) * 0.05 * driveValue;
+                saturated += biasValue * 0.12;
+                break;
+
+              case 'tape':
+                // Analog tape saturation modeling
+                const tapeGain = 1 + driveValue * 3.5;
+                const tapeInput = x * tapeGain;
+
+                const tapeBase = (2 / Math.PI) * Math.atan(tapeInput * Math.PI / 2);
+                const tapeCompression = tapeInput / (1 + Math.abs(tapeInput) * 0.5);
+
+                saturated = tapeBase * 0.7 + tapeCompression * 0.3;
+                saturated += Math.sin(tapeInput * Math.PI) * 0.03 * driveValue;
                 saturated += biasValue * 0.1;
                 break;
-                
-              case 'tape':
-                // Tape saturation: arctan
-                // Low-mid bump, smooth high-end
-                const tapeGain = 1 + driveValue * 2.5;
-                saturated = (2 / Math.PI) * Math.atan(x * tapeGain * Math.PI / 2);
-                saturated += biasValue * 0.08;
-                break;
-                
+
               case 'soft':
               default:
-                // Soft saturation: polynomial (Neve, API, SSL style)
-                // Natural, non-aggressive
-                const softGain = 1 + driveValue * 2.0;
+                // Soft saturation: Console-style
+                const softGain = 1 + driveValue * 2.5;
                 const input = x * softGain;
-                if (Math.abs(input) <= 1) {
-                  saturated = input - (input * input * input) / 3;
+
+                if (Math.abs(input) <= 0.5) {
+                  saturated = input;
+                } else if (Math.abs(input) <= 1.0) {
+                  const sign = Math.sign(input);
+                  const absInput = Math.abs(input);
+                  saturated = sign * (1.5 * absInput - 0.5 * absInput * absInput * absInput);
                 } else {
-                  saturated = Math.sign(input) * (2 / 3);
+                  saturated = Math.sign(input) * 0.875;
                 }
-                saturated += biasValue * 0.05;
+
+                saturated += Math.sin(input * Math.PI * 0.3) * 0.02 * driveValue;
+                saturated += biasValue * 0.06;
                 break;
             }
-            
-            // Clamp to [-1, 1] to prevent clipping and NaN
-            curve[i] = Math.max(-1, Math.min(1, saturated));
+
+            // Apply auto gain compensation
+            saturated *= autoGainCompensation;
+
+            // Clamp to prevent clipping
+            curve[i] = Math.max(-0.98, Math.min(0.98, saturated));
           }
-          
+
           // Cache curve
           if (this.saturationCurveCache.size > 50) {
             const firstKey = this.saturationCurveCache.keys().next().value;
@@ -1471,17 +1598,33 @@ export class AudioEngine {
           }
           this.saturationCurveCache.set(cacheKey, curve);
         }
-        
+
         if (this.saturationNode && curve) {
           // Create new Float32Array from cached curve to ensure proper type
           this.saturationNode.curve = new Float32Array(curve);
         }
+
+        // Update pre/de-emphasis filters based on mode
+        if (this.saturationPreEmphasis && this.saturationDeEmphasis) {
+          if (mode === 'tape') {
+            // Tape mode: use pre/de-emphasis for authentic tape sound
+            this.saturationPreEmphasis.gain.setValueAtTime(6, now); // +6dB boost
+            this.saturationDeEmphasis.gain.setValueAtTime(-6, now); // -6dB cut
+          } else {
+            // Other modes: bypass pre/de-emphasis
+            this.saturationPreEmphasis.gain.setValueAtTime(0, now);
+            this.saturationDeEmphasis.gain.setValueAtTime(0, now);
+          }
+        }
       }
-      if (this.saturationWetGain && settings.saturation.mix !== undefined) {
-        this.saturationWetGain.gain.setValueAtTime(settings.saturation.mix / 100, now);
-      }
-      if (this.saturationDryGain && settings.saturation.mix !== undefined) {
-        this.saturationDryGain.gain.setValueAtTime(1 - (settings.saturation.mix / 100), now);
+      if (this.saturationWetGain && this.saturationDryGain && settings.saturation.mix !== undefined) {
+        // Equal-power crossfade for smooth mixing
+        const mixValue = settings.saturation.mix / 100;
+        const dryGain = Math.cos(mixValue * Math.PI / 2);
+        const wetGain = Math.sin(mixValue * Math.PI / 2);
+
+        this.saturationDryGain.gain.setValueAtTime(dryGain, now);
+        this.saturationWetGain.gain.setValueAtTime(wetGain, now);
       }
       if (settings.saturation.enabled !== undefined && this.saturationMix && this.saturationBypass) {
         this.saturationMix.gain.setValueAtTime(settings.saturation.enabled ? 1 : 0, now);
@@ -1520,16 +1663,16 @@ export class AudioEngine {
 
     // Update stereo width (real-time update)
     if (settings.stereoWidth) {
-      if (this.stereoLeftDirect && this.stereoRightDirect && 
-          this.stereoLeftCrossfeed && this.stereoRightCrossfeed) {
-        const width = settings.stereoWidth.width !== undefined 
-          ? settings.stereoWidth.width / 100 
+      if (this.stereoLeftDirect && this.stereoRightDirect &&
+        this.stereoLeftCrossfeed && this.stereoRightCrossfeed) {
+        const width = settings.stereoWidth.width !== undefined
+          ? settings.stereoWidth.width / 100
           : this.currentSettings.stereoWidth.width / 100;
-        
+
         // Update based on enabled state
-        if (settings.stereoWidth.enabled !== undefined 
-            ? settings.stereoWidth.enabled 
-            : this.currentSettings.stereoWidth.enabled) {
+        if (settings.stereoWidth.enabled !== undefined
+          ? settings.stereoWidth.enabled
+          : this.currentSettings.stereoWidth.enabled) {
           // When enabled, apply stereo width formula
           this.stereoLeftDirect.gain.setValueAtTime((1 + width) / 2, now);
           this.stereoRightDirect.gain.setValueAtTime((1 + width) / 2, now);
@@ -1552,7 +1695,7 @@ export class AudioEngine {
           // Check if there are any active bands
           const bands = settings.multibandCompressor.bands ?? [];
           const hasActiveBands = bands.length > 0 && bands.some(band => band.active);
-          
+
           if (settings.multibandCompressor.enabled && hasActiveBands) {
             // When enabled with active bands, use multiband output
             this.multibandOutput.gain.setValueAtTime(1, now);
@@ -1882,397 +2025,397 @@ export class AudioEngine {
 
     try {
       const sampleRate = this.audioBuffer.sampleRate;
-    const length = this.audioBuffer.length;
-    const numberOfChannels = this.audioBuffer.numberOfChannels;
+      const length = this.audioBuffer.length;
+      const numberOfChannels = this.audioBuffer.numberOfChannels;
 
-    // Create offline context
-    const offlineContext = new OfflineAudioContext(numberOfChannels, length, sampleRate);
+      // Create offline context
+      const offlineContext = new OfflineAudioContext(numberOfChannels, length, sampleRate);
 
-    // Create source
-    const source = offlineContext.createBufferSource();
-    source.buffer = this.audioBuffer;
+      // Create source
+      const source = offlineContext.createBufferSource();
+      source.buffer = this.audioBuffer;
 
-    // Setup audio chain (similar to setupAudioChain but for offline)
-    const inputGain = offlineContext.createGain();
-    inputGain.gain.value = this.dbToGain(settings.inputGain);
+      // Setup audio chain (similar to setupAudioChain but for offline)
+      const inputGain = offlineContext.createGain();
+      inputGain.gain.value = this.dbToGain(settings.inputGain);
 
-    // Multiband Compressor setup
-    let multibandInput: GainNode = inputGain;
-    let multibandOutput: GainNode | null = null;
-    let multibandBypass: GainNode | null = null;
-    
-    if (settings.multibandCompressor.enabled && settings.multibandCompressor.bands.length > 0) {
-      multibandBypass = offlineContext.createGain();
-      multibandBypass.gain.value = 0;
-      multibandOutput = offlineContext.createGain();
-      multibandOutput.gain.value = 1;
-      
-      // Create filters and compressors for each band
-      settings.multibandCompressor.bands.forEach((band) => {
-        if (!band.active) return;
-        
-        // Highpass filter for lower frequency cutoff
-        const highpass = offlineContext.createBiquadFilter();
-        highpass.type = 'highpass';
-        highpass.frequency.value = band.lowFreq;
-        highpass.Q.value = 0.7;
-        
-        // Lowpass filter for upper frequency cutoff
-        const lowpass = offlineContext.createBiquadFilter();
-        lowpass.type = 'lowpass';
-        lowpass.frequency.value = band.highFreq;
-        lowpass.Q.value = 0.7;
-        
-        // Compressor for this band
-        const bandCompressor = offlineContext.createDynamicsCompressor();
-        bandCompressor.threshold.value = band.threshold;
-        bandCompressor.ratio.value = band.ratio;
-        bandCompressor.attack.value = 0.003; // 3ms attack
-        bandCompressor.release.value = 0.1; // 100ms release
-        bandCompressor.knee.value = 30;
-        
-        // Gain for makeup gain
-        const bandGain = offlineContext.createGain();
-        bandGain.gain.value = this.dbToGain(band.gain);
-        
-        // Connect band chain
-        inputGain.connect(highpass);
-        highpass.connect(lowpass);
-        lowpass.connect(bandCompressor);
-        bandCompressor.connect(bandGain);
-        bandGain.connect(multibandOutput!);
-      });
-      
-      // Also connect input to bypass path
-      inputGain.connect(multibandBypass);
-      
-      // Mix multiband output and bypass
-      const multibandMix = offlineContext.createGain();
-      multibandOutput!.connect(multibandMix);
-      multibandBypass.connect(multibandMix);
-      multibandInput = multibandMix;
-    } else {
-      multibandBypass = offlineContext.createGain();
-      multibandBypass.gain.value = 1;
-      inputGain.connect(multibandBypass);
-      multibandInput = multibandBypass;
-    }
+      // Multiband Compressor setup
+      let multibandInput: GainNode = inputGain;
+      let multibandOutput: GainNode | null = null;
+      let multibandBypass: GainNode | null = null;
 
-    // Compressor with bypass
-    const compressor = offlineContext.createDynamicsCompressor();
-    compressor.threshold.value = settings.compressor.threshold;
-    compressor.ratio.value = settings.compressor.ratio;
-    compressor.attack.value = settings.compressor.attack / 1000;
-    compressor.release.value = settings.compressor.release / 1000;
-    compressor.knee.value = 30;
-    
-    const compressorGain = offlineContext.createGain();
-    compressorGain.gain.value = this.dbToGain(settings.compressor.gain);
-    
-    const compressorMix = offlineContext.createGain();
-    const compressorBypass = offlineContext.createGain();
-    compressorMix.gain.value = settings.compressor.enabled ? 1 : 0;
-    compressorBypass.gain.value = settings.compressor.enabled ? 0 : 1;
-    const compressorOutput = offlineContext.createGain();
+      if (settings.multibandCompressor.enabled && settings.multibandCompressor.bands.length > 0) {
+        multibandBypass = offlineContext.createGain();
+        multibandBypass.gain.value = 0;
+        multibandOutput = offlineContext.createGain();
+        multibandOutput.gain.value = 1;
 
-    // Saturation
-    const saturationNode = offlineContext.createWaveShaper();
-    const drive = settings.saturation.drive / 100;
-    const bias = settings.saturation.bias / 100;
-    const mode = settings.saturation.mode || 'soft';
-    const curve = new Float32Array(65536);
-    for (let i = 0; i < 65536; i++) {
-      const x = (i - 32768) / 32768;
-      let saturated: number;
-      
-      // Different saturation curves for different modes
-      switch (mode) {
-        case 'tube':
-          // Tube saturation: smooth, warm, even harmonics
-          saturated = Math.tanh(x * (1 + drive * 2.5)) + bias * 0.15;
-          if (x > 0) {
-            saturated *= 0.98; // Slight compression on positive side
-          }
-          break;
-        case 'tape':
-          // Tape saturation: smooth compression
-          const tapeDrive = 1 + drive * 1.5;
-          saturated = Math.sign(x) * (1 - Math.exp(-Math.abs(x) * tapeDrive)) / tapeDrive;
-          saturated += bias * 0.1;
-          break;
-        case 'soft':
-        default:
-          // Soft saturation: gentle tanh
-          saturated = Math.tanh(x * (1 + drive * 2)) + bias * 0.1;
-          break;
+        // Create filters and compressors for each band
+        settings.multibandCompressor.bands.forEach((band) => {
+          if (!band.active) return;
+
+          // Highpass filter for lower frequency cutoff
+          const highpass = offlineContext.createBiquadFilter();
+          highpass.type = 'highpass';
+          highpass.frequency.value = band.lowFreq;
+          highpass.Q.value = 0.7;
+
+          // Lowpass filter for upper frequency cutoff
+          const lowpass = offlineContext.createBiquadFilter();
+          lowpass.type = 'lowpass';
+          lowpass.frequency.value = band.highFreq;
+          lowpass.Q.value = 0.7;
+
+          // Compressor for this band
+          const bandCompressor = offlineContext.createDynamicsCompressor();
+          bandCompressor.threshold.value = band.threshold;
+          bandCompressor.ratio.value = band.ratio;
+          bandCompressor.attack.value = 0.003; // 3ms attack
+          bandCompressor.release.value = 0.1; // 100ms release
+          bandCompressor.knee.value = 30;
+
+          // Gain for makeup gain
+          const bandGain = offlineContext.createGain();
+          bandGain.gain.value = this.dbToGain(band.gain);
+
+          // Connect band chain
+          inputGain.connect(highpass);
+          highpass.connect(lowpass);
+          lowpass.connect(bandCompressor);
+          bandCompressor.connect(bandGain);
+          bandGain.connect(multibandOutput!);
+        });
+
+        // Also connect input to bypass path
+        inputGain.connect(multibandBypass);
+
+        // Mix multiband output and bypass
+        const multibandMix = offlineContext.createGain();
+        multibandOutput!.connect(multibandMix);
+        multibandBypass.connect(multibandMix);
+        multibandInput = multibandMix;
+      } else {
+        multibandBypass = offlineContext.createGain();
+        multibandBypass.gain.value = 1;
+        inputGain.connect(multibandBypass);
+        multibandInput = multibandBypass;
       }
-      
-      // Clamp to [-1, 1] to prevent clipping and NaN
-      curve[i] = Math.max(-1, Math.min(1, saturated));
-    }
-    saturationNode.curve = curve;
-    saturationNode.oversample = '4x';
-    
-    const saturationDryGain = offlineContext.createGain();
-    const saturationWetGain = offlineContext.createGain();
-    saturationDryGain.gain.value = 1 - (settings.saturation.mix / 100);
-    saturationWetGain.gain.value = settings.saturation.mix / 100;
-    
-    const saturationMix = offlineContext.createGain();
-    const saturationBypass = offlineContext.createGain();
-    saturationMix.gain.value = settings.saturation.enabled ? 1 : 0;
-    saturationBypass.gain.value = settings.saturation.enabled ? 0 : 1;
-    const saturationOutput = offlineContext.createGain();
 
-    // Limiter with bypass (optimized for professional mastering)
-    const limiter = offlineContext.createDynamicsCompressor();
-    limiter.threshold.value = settings.limiter.threshold;
-    limiter.ratio.value = 20; // Maximum for DynamicsCompressorNode (acts as brickwall)
-    limiter.attack.value = 0.003; // 3ms - optimized to prevent distortion on transients
-    limiter.release.value = 0.05; // 50ms - smoother release, prevents pumping
-    limiter.knee.value = 0; // Hard knee for true limiting
-    
-    const limiterMix = offlineContext.createGain();
-    const limiterBypass = offlineContext.createGain();
-    limiterMix.gain.value = settings.limiter.enabled ? 1 : 0;
-    limiterBypass.gain.value = settings.limiter.enabled ? 0 : 1;
-    const limiterOutput = offlineContext.createGain();
+      // Compressor with bypass
+      const compressor = offlineContext.createDynamicsCompressor();
+      compressor.threshold.value = settings.compressor.threshold;
+      compressor.ratio.value = settings.compressor.ratio;
+      compressor.attack.value = settings.compressor.attack / 1000;
+      compressor.release.value = settings.compressor.release / 1000;
+      compressor.knee.value = 30;
 
-    const outputGain = offlineContext.createGain();
-    outputGain.gain.value = this.dbToGain(settings.outputGain);
+      const compressorGain = offlineContext.createGain();
+      compressorGain.gain.value = this.dbToGain(settings.compressor.gain);
 
-    // Fade in/out gain node (3 detik fade in, 3 detik fade out)
-    const fadeGain = offlineContext.createGain();
-    const fadeDuration = 3.0; // 3 detik
-    const audioDuration = length / sampleRate; // Durasi audio dalam detik
-    
-    // Fade in: 0 -> 1 dalam 3 detik pertama
-    fadeGain.gain.setValueAtTime(0, 0);
-    
-    if (audioDuration > fadeDuration * 2) {
-      // Audio lebih panjang dari 6 detik: fade in 3s, steady, fade out 3s
-      fadeGain.gain.linearRampToValueAtTime(1, fadeDuration);
-      const fadeOutStart = audioDuration - fadeDuration;
-      fadeGain.gain.setValueAtTime(1, fadeOutStart);
-      fadeGain.gain.linearRampToValueAtTime(0, audioDuration);
-    } else if (audioDuration > fadeDuration) {
-      // Audio antara 3-6 detik: fade in 3s, lalu langsung fade out
-      fadeGain.gain.linearRampToValueAtTime(1, fadeDuration);
-      const fadeOutStart = audioDuration - fadeDuration;
-      // Pastikan fade out tidak overlap dengan fade in
-      if (fadeOutStart > fadeDuration) {
+      const compressorMix = offlineContext.createGain();
+      const compressorBypass = offlineContext.createGain();
+      compressorMix.gain.value = settings.compressor.enabled ? 1 : 0;
+      compressorBypass.gain.value = settings.compressor.enabled ? 0 : 1;
+      const compressorOutput = offlineContext.createGain();
+
+      // Saturation
+      const saturationNode = offlineContext.createWaveShaper();
+      const drive = settings.saturation.drive / 100;
+      const bias = settings.saturation.bias / 100;
+      const mode = settings.saturation.mode || 'soft';
+      const curve = new Float32Array(65536);
+      for (let i = 0; i < 65536; i++) {
+        const x = (i - 32768) / 32768;
+        let saturated: number;
+
+        // Different saturation curves for different modes
+        switch (mode) {
+          case 'tube':
+            // Tube saturation: smooth, warm, even harmonics
+            saturated = Math.tanh(x * (1 + drive * 2.5)) + bias * 0.15;
+            if (x > 0) {
+              saturated *= 0.98; // Slight compression on positive side
+            }
+            break;
+          case 'tape':
+            // Tape saturation: smooth compression
+            const tapeDrive = 1 + drive * 1.5;
+            saturated = Math.sign(x) * (1 - Math.exp(-Math.abs(x) * tapeDrive)) / tapeDrive;
+            saturated += bias * 0.1;
+            break;
+          case 'soft':
+          default:
+            // Soft saturation: gentle tanh
+            saturated = Math.tanh(x * (1 + drive * 2)) + bias * 0.1;
+            break;
+        }
+
+        // Clamp to [-1, 1] to prevent clipping and NaN
+        curve[i] = Math.max(-1, Math.min(1, saturated));
+      }
+      saturationNode.curve = curve;
+      saturationNode.oversample = '4x';
+
+      const saturationDryGain = offlineContext.createGain();
+      const saturationWetGain = offlineContext.createGain();
+      saturationDryGain.gain.value = 1 - (settings.saturation.mix / 100);
+      saturationWetGain.gain.value = settings.saturation.mix / 100;
+
+      const saturationMix = offlineContext.createGain();
+      const saturationBypass = offlineContext.createGain();
+      saturationMix.gain.value = settings.saturation.enabled ? 1 : 0;
+      saturationBypass.gain.value = settings.saturation.enabled ? 0 : 1;
+      const saturationOutput = offlineContext.createGain();
+
+      // Limiter with bypass (optimized for professional mastering)
+      const limiter = offlineContext.createDynamicsCompressor();
+      limiter.threshold.value = settings.limiter.threshold;
+      limiter.ratio.value = 20; // Maximum for DynamicsCompressorNode (acts as brickwall)
+      limiter.attack.value = 0.003; // 3ms - optimized to prevent distortion on transients
+      limiter.release.value = 0.05; // 50ms - smoother release, prevents pumping
+      limiter.knee.value = 0; // Hard knee for true limiting
+
+      const limiterMix = offlineContext.createGain();
+      const limiterBypass = offlineContext.createGain();
+      limiterMix.gain.value = settings.limiter.enabled ? 1 : 0;
+      limiterBypass.gain.value = settings.limiter.enabled ? 0 : 1;
+      const limiterOutput = offlineContext.createGain();
+
+      const outputGain = offlineContext.createGain();
+      outputGain.gain.value = this.dbToGain(settings.outputGain);
+
+      // Fade in/out gain node (3 detik fade in, 3 detik fade out)
+      const fadeGain = offlineContext.createGain();
+      const fadeDuration = 3.0; // 3 detik
+      const audioDuration = length / sampleRate; // Durasi audio dalam detik
+
+      // Fade in: 0 -> 1 dalam 3 detik pertama
+      fadeGain.gain.setValueAtTime(0, 0);
+
+      if (audioDuration > fadeDuration * 2) {
+        // Audio lebih panjang dari 6 detik: fade in 3s, steady, fade out 3s
+        fadeGain.gain.linearRampToValueAtTime(1, fadeDuration);
+        const fadeOutStart = audioDuration - fadeDuration;
         fadeGain.gain.setValueAtTime(1, fadeOutStart);
         fadeGain.gain.linearRampToValueAtTime(0, audioDuration);
+      } else if (audioDuration > fadeDuration) {
+        // Audio antara 3-6 detik: fade in 3s, lalu langsung fade out
+        fadeGain.gain.linearRampToValueAtTime(1, fadeDuration);
+        const fadeOutStart = audioDuration - fadeDuration;
+        // Pastikan fade out tidak overlap dengan fade in
+        if (fadeOutStart > fadeDuration) {
+          fadeGain.gain.setValueAtTime(1, fadeOutStart);
+          fadeGain.gain.linearRampToValueAtTime(0, audioDuration);
+        } else {
+          // Jika overlap, fade out dimulai setelah fade in selesai
+          fadeGain.gain.setValueAtTime(1, fadeDuration);
+          fadeGain.gain.linearRampToValueAtTime(0, audioDuration);
+        }
       } else {
-        // Jika overlap, fade out dimulai setelah fade in selesai
-        fadeGain.gain.setValueAtTime(1, fadeDuration);
+        // Audio lebih pendek dari 3 detik: fade in setengah, fade out setengah
+        const halfDuration = audioDuration / 2;
+        fadeGain.gain.linearRampToValueAtTime(1, halfDuration);
         fadeGain.gain.linearRampToValueAtTime(0, audioDuration);
       }
-    } else {
-      // Audio lebih pendek dari 3 detik: fade in setengah, fade out setengah
-      const halfDuration = audioDuration / 2;
-      fadeGain.gain.linearRampToValueAtTime(1, halfDuration);
-      fadeGain.gain.linearRampToValueAtTime(0, audioDuration);
-    }
 
-    // Connect chain
-    source.connect(inputGain);
-    
-    // Multiband Compressor (already connected above)
-    // multibandInput is now the output from multiband or bypass
-    
-    // Compressor with bypass
-    multibandInput.connect(compressor);
-    multibandInput.connect(compressorBypass);
-    compressor.connect(compressorGain);
-    compressorGain.connect(compressorMix);
-    compressorMix.connect(compressorOutput);
-    compressorBypass.connect(compressorOutput);
-    
-    // Reverb in parallel (if enabled) - simplified for export
-    let reverbOutput: GainNode | null = null;
-    if (settings.reverb.enabled) {
-      const maxDelayTime = 0.1; // Max 100ms
-      const reverbDelay = offlineContext.createDelay(maxDelayTime);
-      const delayTime = settings.reverb.size / 100 * 0.1; // Max 100ms
-      reverbDelay.delayTime.value = delayTime;
-      
-      const reverbFeedback = offlineContext.createGain();
-      // Cap feedback at 0.95 untuk stabilitas
-      const feedbackValue = Math.min(0.95, settings.reverb.decay / 10 * 0.3);
-      reverbFeedback.gain.value = feedbackValue;
-      
-      const reverbDamping = offlineContext.createBiquadFilter();
-      reverbDamping.type = 'lowpass';
-      reverbDamping.frequency.value = 20000 - (settings.reverb.damping / 100 * 15000);
-      
-      reverbDelay.connect(reverbDamping);
-      reverbDamping.connect(reverbFeedback);
-      reverbFeedback.connect(reverbDelay);
-      
-      const reverbWetGain = offlineContext.createGain();
-      const reverbDryGain = offlineContext.createGain();
-      reverbWetGain.gain.value = settings.reverb.mix / 100;
-      reverbDryGain.gain.value = 1 - (settings.reverb.mix / 100);
-      
-      compressorOutput.connect(reverbDryGain);
-      compressorOutput.connect(reverbDelay);
-      reverbDelay.connect(reverbWetGain);
-      
-      reverbOutput = offlineContext.createGain();
-      reverbDryGain.connect(reverbOutput);
-      reverbWetGain.connect(reverbOutput);
-    }
-    
-    // Saturation with bypass
-    const saturationInput = reverbOutput || compressorOutput;
-    saturationInput.connect(saturationNode);
-    saturationInput.connect(saturationDryGain);
-    saturationNode.connect(saturationWetGain);
-    
-    // Mix wet and dry signals using GainNode (not ChannelMerger)
-    const saturationMixNode = offlineContext.createGain();
-    saturationWetGain.connect(saturationMixNode);
-    saturationDryGain.connect(saturationMixNode);
-    saturationMixNode.connect(saturationMix);
-    
-    saturationInput.connect(saturationBypass);
-    saturationMix.connect(saturationOutput);
-    saturationBypass.connect(saturationOutput);
-    
-    // Harmonizer with bypass (delay-based chorus effect)
-    // Untuk export, kita gunakan fixed delay time dengan sedikit variasi
-    // (LFO tidak bisa digunakan di OfflineAudioContext dengan cara yang sama)
-    const harmonizerDelay1 = offlineContext.createDelay(0.05);
-    const harmonizerDelay2 = offlineContext.createDelay(0.05);
-    // Base delay dengan variasi berdasarkan depth
-    const baseDelay = 0.010; // 10ms
-    const depthVariation = (settings.harmonizer.depth / 100) * 0.005; // Max 5ms variation
-    harmonizerDelay1.delayTime.value = baseDelay;
-    harmonizerDelay2.delayTime.value = baseDelay * 1.5 + depthVariation; // Slightly different delay
-    const harmonizerToneFilter = offlineContext.createBiquadFilter();
-    harmonizerToneFilter.type = 'peaking';
-    harmonizerToneFilter.frequency.value = 2000 + (settings.harmonizer.tone / 100 * 3000);
-    harmonizerToneFilter.Q.value = 1;
-    harmonizerToneFilter.gain.value = settings.harmonizer.tone / 10;
-    
-    const harmonizerDryGain = offlineContext.createGain();
-    const harmonizerWetGain = offlineContext.createGain();
-    harmonizerDryGain.gain.value = 1 - (settings.harmonizer.mix / 100);
-    harmonizerWetGain.gain.value = settings.harmonizer.mix / 100;
-    
-    const harmonizerMix = offlineContext.createGain();
-    const harmonizerBypass = offlineContext.createGain();
-    harmonizerMix.gain.value = settings.harmonizer.enabled ? 1 : 0;
-    harmonizerBypass.gain.value = settings.harmonizer.enabled ? 0 : 1;
-    const harmonizerOutput = offlineContext.createGain();
-    
-    if (settings.harmonizer.enabled) {
-      // Connect input to delays and dry path
-      saturationOutput.connect(harmonizerDelay1);
-      saturationOutput.connect(harmonizerDelay2);
-      saturationOutput.connect(harmonizerDryGain);
-      
-      // Process delayed signals through tone filter (sum both delays)
-      const delaySum = offlineContext.createGain();
-      harmonizerDelay1.connect(delaySum);
-      harmonizerDelay2.connect(delaySum);
-      delaySum.connect(harmonizerToneFilter);
-      harmonizerToneFilter.connect(harmonizerWetGain);
-      
-      // Mix dry and wet
-      const harmonizerMixNode = offlineContext.createGain();
-      harmonizerDryGain.connect(harmonizerMixNode);
-      harmonizerWetGain.connect(harmonizerMixNode);
-      harmonizerMixNode.connect(harmonizerMix);
-    } else {
-      saturationOutput.connect(harmonizerMix);
-    }
-    saturationOutput.connect(harmonizerBypass);
-    harmonizerMix.connect(harmonizerOutput);
-    harmonizerBypass.connect(harmonizerOutput);
-    
-    // Stereo Width (if enabled and stereo) - same proper implementation as playback
-    let stereoOutput: GainNode = harmonizerOutput;
-    if (settings.stereoWidth.enabled && numberOfChannels >= 2) {
-      const splitter = offlineContext.createChannelSplitter(2);
-      const merger = offlineContext.createChannelMerger(2);
-      const width = settings.stereoWidth.width / 100;
-      
-      // Same proper formula as playback
-      const leftDirect = offlineContext.createGain();
-      const rightDirect = offlineContext.createGain();
-      const leftCrossfeed = offlineContext.createGain();
-      const rightCrossfeed = offlineContext.createGain();
-      
-      leftDirect.gain.value = (1 + width) / 2;
-      rightDirect.gain.value = (1 + width) / 2;
-      leftCrossfeed.gain.value = (1 - width) / 2;
-      rightCrossfeed.gain.value = (1 - width) / 2;
-      
-      saturationOutput.connect(splitter);
-      splitter.connect(leftDirect, 0);
-      splitter.connect(rightDirect, 1);
-      splitter.connect(leftCrossfeed, 1);
-      splitter.connect(rightCrossfeed, 0);
-      
-      const leftSum = offlineContext.createGain();
-      const rightSum = offlineContext.createGain();
-      leftDirect.connect(leftSum);
-      leftCrossfeed.connect(leftSum);
-      rightDirect.connect(rightSum);
-      rightCrossfeed.connect(rightSum);
-      
-      leftSum.connect(merger, 0, 0);
-      rightSum.connect(merger, 0, 1);
-      
-      stereoOutput = offlineContext.createGain();
-      merger.connect(stereoOutput);
-    }
-    
-    // Limiter with bypass
-    stereoOutput.connect(limiter);
-    stereoOutput.connect(limiterBypass);
-    limiter.connect(limiterMix);
-    limiterMix.connect(limiterOutput);
-    limiterBypass.connect(limiterOutput);
-    
-    limiterOutput.connect(fadeGain);
-    fadeGain.connect(outputGain);
-    outputGain.connect(offlineContext.destination);
+      // Connect chain
+      source.connect(inputGain);
 
-    // Render
-    source.start(0);
-    const renderedBuffer = await offlineContext.startRendering();
+      // Multiband Compressor (already connected above)
+      // multibandInput is now the output from multiband or bypass
 
-    if (!renderedBuffer) {
-      throw new Error('Failed to render audio buffer');
-    }
+      // Compressor with bypass
+      multibandInput.connect(compressor);
+      multibandInput.connect(compressorBypass);
+      compressor.connect(compressorGain);
+      compressorGain.connect(compressorMix);
+      compressorMix.connect(compressorOutput);
+      compressorBypass.connect(compressorOutput);
 
-    // Convert to WAV
-    if (format === 'wav') {
-      try {
-        // audiobuffer-to-wav uses CommonJS default export
-        const audioBufferToWavModule = await import('audiobuffer-to-wav');
-        const audioBufferToWav = (audioBufferToWavModule.default || audioBufferToWavModule) as (buffer: AudioBuffer) => ArrayBuffer;
-        
-        if (typeof audioBufferToWav !== 'function') {
-          throw new Error('audioBufferToWav is not a function. Module structure: ' + JSON.stringify(Object.keys(audioBufferToWavModule)));
-        }
-        
-        const wav = audioBufferToWav(renderedBuffer);
-        if (!wav || (wav instanceof ArrayBuffer && wav.byteLength === 0)) {
-          throw new Error('WAV conversion produced empty buffer');
-        }
-        return new Blob([wav], { type: 'audio/wav' });
-      } catch (err: unknown) {
-        console.error('WAV conversion error:', err);
-        throw new Error(`Failed to convert to WAV: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      // Reverb in parallel (if enabled) - simplified for export
+      let reverbOutput: GainNode | null = null;
+      if (settings.reverb.enabled) {
+        const maxDelayTime = 0.1; // Max 100ms
+        const reverbDelay = offlineContext.createDelay(maxDelayTime);
+        const delayTime = settings.reverb.size / 100 * 0.1; // Max 100ms
+        reverbDelay.delayTime.value = delayTime;
+
+        const reverbFeedback = offlineContext.createGain();
+        // Cap feedback at 0.95 untuk stabilitas
+        const feedbackValue = Math.min(0.95, settings.reverb.decay / 10 * 0.3);
+        reverbFeedback.gain.value = feedbackValue;
+
+        const reverbDamping = offlineContext.createBiquadFilter();
+        reverbDamping.type = 'lowpass';
+        reverbDamping.frequency.value = 20000 - (settings.reverb.damping / 100 * 15000);
+
+        reverbDelay.connect(reverbDamping);
+        reverbDamping.connect(reverbFeedback);
+        reverbFeedback.connect(reverbDelay);
+
+        const reverbWetGain = offlineContext.createGain();
+        const reverbDryGain = offlineContext.createGain();
+        reverbWetGain.gain.value = settings.reverb.mix / 100;
+        reverbDryGain.gain.value = 1 - (settings.reverb.mix / 100);
+
+        compressorOutput.connect(reverbDryGain);
+        compressorOutput.connect(reverbDelay);
+        reverbDelay.connect(reverbWetGain);
+
+        reverbOutput = offlineContext.createGain();
+        reverbDryGain.connect(reverbOutput);
+        reverbWetGain.connect(reverbOutput);
       }
-    }
 
-    // For MP3, would need additional library
-    throw new Error('MP3 export not yet implemented');
+      // Saturation with bypass
+      const saturationInput = reverbOutput || compressorOutput;
+      saturationInput.connect(saturationNode);
+      saturationInput.connect(saturationDryGain);
+      saturationNode.connect(saturationWetGain);
+
+      // Mix wet and dry signals using GainNode (not ChannelMerger)
+      const saturationMixNode = offlineContext.createGain();
+      saturationWetGain.connect(saturationMixNode);
+      saturationDryGain.connect(saturationMixNode);
+      saturationMixNode.connect(saturationMix);
+
+      saturationInput.connect(saturationBypass);
+      saturationMix.connect(saturationOutput);
+      saturationBypass.connect(saturationOutput);
+
+      // Harmonizer with bypass (delay-based chorus effect)
+      // Untuk export, kita gunakan fixed delay time dengan sedikit variasi
+      // (LFO tidak bisa digunakan di OfflineAudioContext dengan cara yang sama)
+      const harmonizerDelay1 = offlineContext.createDelay(0.05);
+      const harmonizerDelay2 = offlineContext.createDelay(0.05);
+      // Base delay dengan variasi berdasarkan depth
+      const baseDelay = 0.010; // 10ms
+      const depthVariation = (settings.harmonizer.depth / 100) * 0.005; // Max 5ms variation
+      harmonizerDelay1.delayTime.value = baseDelay;
+      harmonizerDelay2.delayTime.value = baseDelay * 1.5 + depthVariation; // Slightly different delay
+      const harmonizerToneFilter = offlineContext.createBiquadFilter();
+      harmonizerToneFilter.type = 'peaking';
+      harmonizerToneFilter.frequency.value = 2000 + (settings.harmonizer.tone / 100 * 3000);
+      harmonizerToneFilter.Q.value = 1;
+      harmonizerToneFilter.gain.value = settings.harmonizer.tone / 10;
+
+      const harmonizerDryGain = offlineContext.createGain();
+      const harmonizerWetGain = offlineContext.createGain();
+      harmonizerDryGain.gain.value = 1 - (settings.harmonizer.mix / 100);
+      harmonizerWetGain.gain.value = settings.harmonizer.mix / 100;
+
+      const harmonizerMix = offlineContext.createGain();
+      const harmonizerBypass = offlineContext.createGain();
+      harmonizerMix.gain.value = settings.harmonizer.enabled ? 1 : 0;
+      harmonizerBypass.gain.value = settings.harmonizer.enabled ? 0 : 1;
+      const harmonizerOutput = offlineContext.createGain();
+
+      if (settings.harmonizer.enabled) {
+        // Connect input to delays and dry path
+        saturationOutput.connect(harmonizerDelay1);
+        saturationOutput.connect(harmonizerDelay2);
+        saturationOutput.connect(harmonizerDryGain);
+
+        // Process delayed signals through tone filter (sum both delays)
+        const delaySum = offlineContext.createGain();
+        harmonizerDelay1.connect(delaySum);
+        harmonizerDelay2.connect(delaySum);
+        delaySum.connect(harmonizerToneFilter);
+        harmonizerToneFilter.connect(harmonizerWetGain);
+
+        // Mix dry and wet
+        const harmonizerMixNode = offlineContext.createGain();
+        harmonizerDryGain.connect(harmonizerMixNode);
+        harmonizerWetGain.connect(harmonizerMixNode);
+        harmonizerMixNode.connect(harmonizerMix);
+      } else {
+        saturationOutput.connect(harmonizerMix);
+      }
+      saturationOutput.connect(harmonizerBypass);
+      harmonizerMix.connect(harmonizerOutput);
+      harmonizerBypass.connect(harmonizerOutput);
+
+      // Stereo Width (if enabled and stereo) - same proper implementation as playback
+      let stereoOutput: GainNode = harmonizerOutput;
+      if (settings.stereoWidth.enabled && numberOfChannels >= 2) {
+        const splitter = offlineContext.createChannelSplitter(2);
+        const merger = offlineContext.createChannelMerger(2);
+        const width = settings.stereoWidth.width / 100;
+
+        // Same proper formula as playback
+        const leftDirect = offlineContext.createGain();
+        const rightDirect = offlineContext.createGain();
+        const leftCrossfeed = offlineContext.createGain();
+        const rightCrossfeed = offlineContext.createGain();
+
+        leftDirect.gain.value = (1 + width) / 2;
+        rightDirect.gain.value = (1 + width) / 2;
+        leftCrossfeed.gain.value = (1 - width) / 2;
+        rightCrossfeed.gain.value = (1 - width) / 2;
+
+        saturationOutput.connect(splitter);
+        splitter.connect(leftDirect, 0);
+        splitter.connect(rightDirect, 1);
+        splitter.connect(leftCrossfeed, 1);
+        splitter.connect(rightCrossfeed, 0);
+
+        const leftSum = offlineContext.createGain();
+        const rightSum = offlineContext.createGain();
+        leftDirect.connect(leftSum);
+        leftCrossfeed.connect(leftSum);
+        rightDirect.connect(rightSum);
+        rightCrossfeed.connect(rightSum);
+
+        leftSum.connect(merger, 0, 0);
+        rightSum.connect(merger, 0, 1);
+
+        stereoOutput = offlineContext.createGain();
+        merger.connect(stereoOutput);
+      }
+
+      // Limiter with bypass
+      stereoOutput.connect(limiter);
+      stereoOutput.connect(limiterBypass);
+      limiter.connect(limiterMix);
+      limiterMix.connect(limiterOutput);
+      limiterBypass.connect(limiterOutput);
+
+      limiterOutput.connect(fadeGain);
+      fadeGain.connect(outputGain);
+      outputGain.connect(offlineContext.destination);
+
+      // Render
+      source.start(0);
+      const renderedBuffer = await offlineContext.startRendering();
+
+      if (!renderedBuffer) {
+        throw new Error('Failed to render audio buffer');
+      }
+
+      // Convert to WAV
+      if (format === 'wav') {
+        try {
+          // audiobuffer-to-wav uses CommonJS default export
+          const audioBufferToWavModule = await import('audiobuffer-to-wav');
+          const audioBufferToWav = (audioBufferToWavModule.default || audioBufferToWavModule) as (buffer: AudioBuffer) => ArrayBuffer;
+
+          if (typeof audioBufferToWav !== 'function') {
+            throw new Error('audioBufferToWav is not a function. Module structure: ' + JSON.stringify(Object.keys(audioBufferToWavModule)));
+          }
+
+          const wav = audioBufferToWav(renderedBuffer);
+          if (!wav || (wav instanceof ArrayBuffer && wav.byteLength === 0)) {
+            throw new Error('WAV conversion produced empty buffer');
+          }
+          return new Blob([wav], { type: 'audio/wav' });
+        } catch (err: unknown) {
+          console.error('WAV conversion error:', err);
+          throw new Error(`Failed to convert to WAV: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+      }
+
+      // For MP3, would need additional library
+      throw new Error('MP3 export not yet implemented');
     } catch (err: unknown) {
       console.error('Export audio error:', err);
       throw err;
