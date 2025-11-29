@@ -471,8 +471,8 @@ export function AudioMasteringPlugin() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6 mb-6">
+        <div className="order-1 md:order-0">
           <h1 className="text-zinc-100 tracking-wider">MASTER PRO</h1>
           <p className="text-zinc-500 text-xs mt-1">Professional Audio Mastering Plugin</p>
           {audioFileName && (
@@ -502,7 +502,7 @@ export function AudioMasteringPlugin() {
             <p className="text-yellow-400 text-xs mt-1">Loading audio...</p>
           )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4 flex-wrap md:flex-nowrap order-2 md:order-0 w-full md:w-auto">
           {/* Upload Button */}
           <label className={`bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 transition-colors flex items-center gap-2 ${
             !isInitialized || isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
@@ -531,7 +531,7 @@ export function AudioMasteringPlugin() {
           <select 
             value={selectedPresetId ? `db-${selectedPresetId}` : selectedPreset}
             onChange={(e) => handlePresetChange(e.target.value)}
-            className="bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 text-sm min-w-[200px]"
+            className="bg-zinc-700 text-zinc-100 px-3 md:px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 text-sm min-w-[140px] sm:min-w-[180px] md:min-w-[200px]"
             disabled={presetsLoading}
           >
             <optgroup label="Built-in Presets">
@@ -568,7 +568,7 @@ export function AudioMasteringPlugin() {
           <button className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-2 rounded-lg border border-zinc-600 transition-colors">
             <Settings className="w-4 h-4" />
           </button>
-          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 rounded-lg border border-zinc-700">
+          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 rounded-lg border border-zinc-700 max-w-full">
             <span className="text-zinc-400 text-xs">{user?.username}</span>
           </div>
           <button 
@@ -583,9 +583,9 @@ export function AudioMasteringPlugin() {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left Column - Input/Output & Meters */}
-        <div className="col-span-2 space-y-4">
+        <div className="col-span-12 md:col-span-3 lg:col-span-2 space-y-4">
           <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
             <h3 className="text-zinc-400 text-xs mb-3 tracking-wider">INPUT</h3>
             <Knob 
@@ -626,7 +626,7 @@ export function AudioMasteringPlugin() {
         </div>
 
         {/* Middle Column - Visualizers & Multiband Compressor */}
-        <div className="col-span-7 space-y-4">
+        <div className="col-span-12 md:col-span-6 lg:col-span-7 space-y-4">
           {/* Waveform Display */}
           <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700 relative">
             <div className="flex items-center justify-between mb-3">
@@ -700,7 +700,7 @@ export function AudioMasteringPlugin() {
         </div>
 
         {/* Right Column - Processing Controls */}
-        <div className="col-span-3 space-y-4">
+        <div className="col-span-12 md:col-span-3 space-y-4">
           {/* Compressor */}
           <div className={`bg-zinc-800/50 rounded-xl p-4 border ${compressorEnabled ? 'border-zinc-700' : 'border-zinc-800 opacity-60'}`}>
             <div className="flex items-center justify-between mb-4">

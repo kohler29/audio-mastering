@@ -67,6 +67,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
+        {seoConfig.stage?.toLowerCase() === "beta" && (
+          <div className="w-full bg-amber-900/40 text-amber-300 text-xs px-3 py-2 text-center border-b border-amber-700">
+            {seoConfig.bannerText}
+          </div>
+        )}
         {children}
       </body>
     </html>

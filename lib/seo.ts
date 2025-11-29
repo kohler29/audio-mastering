@@ -4,6 +4,8 @@ export interface SEOConfig {
   defaultTitle: string;
   defaultDescription: string;
   twitterHandle: string;
+  stage: string;
+  bannerText: string;
 }
 
 export const seoConfig: SEOConfig = {
@@ -14,5 +16,6 @@ export const seoConfig: SEOConfig = {
     process.env.NEXT_PUBLIC_DEFAULT_DESCRIPTION ||
     "Professional audio mastering plugin with advanced controls and real-time visualization",
   twitterHandle: process.env.NEXT_PUBLIC_TWITTER_HANDLE || "@masterpro",
+  stage: process.env.NEXT_PUBLIC_APP_STAGE || "beta",
+  bannerText: process.env.NEXT_PUBLIC_APP_BANNER || "Beta",
 };
-
