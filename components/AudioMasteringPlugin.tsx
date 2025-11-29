@@ -40,6 +40,7 @@ export function AudioMasteringPlugin() {
     exportAudio,
     resumeContext,
     getWaveformData,
+    getStereoWaveformData,
   } = useAudioEngine();
 
   const { savePreset, presets: dbPresets, isLoading: presetsLoading, loadPreset } = usePresets();
@@ -52,7 +53,8 @@ export function AudioMasteringPlugin() {
   const [presetName, setPresetName] = useState('');
   const [presetIsPublic, setPresetIsPublic] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [waveformData, setWaveformData] = useState<Float32Array | null>(null);
+  const [leftWaveformData, setLeftWaveformData] = useState<Float32Array | null>(null);
+  const [rightWaveformData, setRightWaveformData] = useState<Float32Array | null>(null);
   
   // Control states
   const [inputGain, setInputGain] = useState(0);
@@ -229,12 +231,24 @@ export function AudioMasteringPlugin() {
       setAudioFileName(file.name);
       stop();
       
-      // Generate waveform data after a short delay to ensure audio buffer is ready
+      // Generate stereo waveform data after a short delay to ensure audio buffer is ready
       setTimeout(() => {
         // Use a reasonable width for waveform (will be scaled to canvas size)
-        const data = getWaveformData(2000);
-        if (data) {
-          setWaveformData(data);
+        const stereoData = getStereoWaveformData(2000);
+        if (stereoData) {
+          console.log('Waveform data generated:', {
+            hasLeft: !!stereoData.left,
+            hasRight: !!stereoData.right,
+            leftLength: stereoData.left?.length,
+            rightLength: stereoData.right?.length,
+            leftFirst: stereoData.left?.[0],
+            rightFirst: stereoData.right?.[0],
+            areSame: stereoData.left === stereoData.right
+          });
+          setLeftWaveformData(stereoData.left);
+          setRightWaveformData(stereoData.right);
+        } else {
+          console.warn('No stereo waveform data returned');
         }
       }, 100);
       
@@ -677,7 +691,8 @@ export function AudioMasteringPlugin() {
             </div>
             <Waveform 
               isPlaying={isPlaying} 
-              waveformData={waveformData}
+              leftWaveformData={leftWaveformData}
+              rightWaveformData={rightWaveformData}
               currentTime={currentTime}
               duration={duration}
               onSeek={seek}

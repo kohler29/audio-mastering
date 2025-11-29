@@ -23,6 +23,7 @@ export interface UseAudioEngineReturn {
   exportAudio: (settings: AudioEngineSettings, format?: 'wav' | 'mp3') => Promise<Blob>;
   resumeContext: () => Promise<void>;
   getWaveformData: (width?: number) => Float32Array | null;
+  getStereoWaveformData: (width?: number) => { left: Float32Array; right: Float32Array } | null;
 }
 
 export function useAudioEngine(): UseAudioEngineReturn {
@@ -40,7 +41,7 @@ export function useAudioEngine(): UseAudioEngineReturn {
   // Initialize audio engine
   useEffect(() => {
     const audioEngine = new AudioEngine();
-    
+
     audioEngine.initialize()
       .then(() => {
         setEngine(audioEngine);
@@ -69,7 +70,7 @@ export function useAudioEngine(): UseAudioEngineReturn {
     });
 
     return () => {
-      engine.setOnTimeUpdate(() => {});
+      engine.setOnTimeUpdate(() => { });
     };
   }, [engine]);
 
@@ -157,8 +158,11 @@ export function useAudioEngine(): UseAudioEngineReturn {
     if (!engine) return;
 
     try {
+      const wasPlaying = engine.getIsPlaying();
       engine.seek(time);
       setCurrentTime(time);
+      // Pastikan state isPlaying tetap sinkron setelah seek
+      setIsPlaying(engine.getIsPlaying());
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to seek';
       setError(errorMessage);
@@ -238,6 +242,11 @@ export function useAudioEngine(): UseAudioEngineReturn {
     return engine.getWaveformData(width);
   }, [engine]);
 
+  const getStereoWaveformData = useCallback((width?: number): { left: Float32Array; right: Float32Array } | null => {
+    if (!engine) return null;
+    return engine.getStereoWaveformData(width);
+  }, [engine]);
+
   return {
     engine,
     isInitialized,
@@ -258,6 +267,7 @@ export function useAudioEngine(): UseAudioEngineReturn {
     exportAudio,
     resumeContext,
     getWaveformData,
+    getStereoWaveformData,
   };
 }
 

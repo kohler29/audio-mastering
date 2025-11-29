@@ -655,8 +655,8 @@ export class AudioEngine {
     this.saturationDCBlocker.frequency.value = 20;
     this.saturationDCBlocker.Q.value = 0.707; // Butterworth response
 
-      // Create pre-emphasis filter untuk tape mode
-      // Boosts high frequencies before saturation (like real tape machines)
+    // Create pre-emphasis filter untuk tape mode
+    // Boosts high frequencies before saturation (like real tape machines)
     this.saturationPreEmphasis = this.audioContext.createBiquadFilter();
     this.saturationPreEmphasis.type = 'highshelf';
     this.saturationPreEmphasis.frequency.value = 3000; // 3kHz
@@ -1030,16 +1030,32 @@ export class AudioEngine {
       this.audioGraphBuilt = true;
     }
 
-    // Hanya create source node baru (graph sudah ada)
-    if (this.sourceNode && this.sourceNodeStarted) {
-      try {
-        this.sourceNode.stop();
-      } catch {
-        // Ignore
+    // Stop dan cleanup source node yang ada (jika ada)
+    // PASTIKAN benar-benar di-stop sebelum membuat yang baru
+    if (this.sourceNode) {
+      // Remove onended handler untuk mencegah callback yang tidak diinginkan
+      this.sourceNode.onended = null;
+      
+      if (this.sourceNodeStarted) {
+        try {
+          this.sourceNode.stop();
+        } catch {
+          // Ignore
+        }
       }
-      this.sourceNode.disconnect();
+      
+      try {
+        this.sourceNode.disconnect();
+      } catch {
+        // Node mungkin sudah ter-disconnect, ignore
+      }
+      
+      // Clear reference
+      this.sourceNode = null;
+      this.sourceNodeStarted = false;
     }
 
+    // Buat source node baru (pastikan sourceNode sudah null)
     this.sourceNode = this.audioContext.createBufferSource();
     this.sourceNode.buffer = this.audioBuffer;
 
@@ -1111,15 +1127,22 @@ export class AudioEngine {
   pause(): void {
     if (!this.isPlaying || !this.sourceNode || !this.audioContext) return;
 
+    // Remove onended handler untuk mencegah callback yang tidak diinginkan
+    this.sourceNode.onended = null;
+
     if (this.sourceNodeStarted) {
       try {
         this.sourceNode.stop();
-      } catch (error) {
-        // Source node may have already ended
-        console.warn('Failed to stop source node:', error);
+      } catch {
+        // Source node mungkin sudah berakhir, ignore
       }
       this.sourceNodeStarted = false;
     }
+    
+    // Jangan disconnect atau clear source node saat pause
+    // Biarkan tetap terhubung untuk bisa resume nanti
+    // Tapi kita tidak akan menggunakan source node yang sama, akan buat baru saat play()
+    
     this.pausedTime = this.currentTime;
     this.isPlaying = false;
     this.stopTimeUpdate();
@@ -1149,22 +1172,96 @@ export class AudioEngine {
   }
 
   seek(time: number): void {
-    if (!this.audioBuffer) return;
+    if (!this.audioBuffer || !this.audioContext) return;
 
     const wasPlaying = this.isPlaying;
-    if (wasPlaying) {
-      this.pause();
+    const seekTime = Math.max(0, Math.min(time, this.duration));
+    
+    // Stop dan cleanup source node yang sedang playing (jika ada)
+    // PASTIKAN benar-benar di-stop sebelum membuat yang baru
+    if (this.sourceNode) {
+      // Remove onended handler untuk mencegah callback yang tidak diinginkan
+      this.sourceNode.onended = null;
+      
+      if (this.sourceNodeStarted) {
+        try {
+          this.sourceNode.stop();
+        } catch {
+          // Source node mungkin sudah berakhir, ignore
+        }
+      }
+      
+      try {
+        this.sourceNode.disconnect();
+      } catch {
+        // Node mungkin sudah ter-disconnect, ignore
+      }
+      
+      // Clear reference
+      this.sourceNode = null;
+      this.sourceNodeStarted = false;
     }
 
-    this.pausedTime = Math.max(0, Math.min(time, this.duration));
-    this.currentTime = this.pausedTime;
+    // Stop time update tracking sebelum membuat source node baru
+    this.stopTimeUpdate();
+    this.stopGainReductionTracking();
 
+    // Update waktu
+    this.pausedTime = seekTime;
+    this.currentTime = seekTime;
+
+    // Jika sedang playing, langsung buat source node baru dan play
     if (wasPlaying) {
-      this.play();
-    }
+      // Pastikan graph sudah dibangun
+      if (!this.audioGraphBuilt) {
+        this.buildAudioGraph(this.getCurrentSettings());
+        this.audioGraphBuilt = true;
+      }
 
-    if (this.onTimeUpdate) {
-      this.onTimeUpdate(this.pausedTime);
+      // Reset loudness meter
+      this.resetLoudnessMeter();
+
+      // Buat source node baru (pastikan sourceNode sudah null)
+      this.sourceNode = this.audioContext.createBufferSource();
+      this.sourceNode.buffer = this.audioBuffer;
+
+      // Connect ke input gain
+      this.sourceNode.connect(this.gainNodes.input!);
+
+      // Handle playback end
+      this.sourceNode.onended = () => {
+        // Pastikan ini adalah source node yang masih aktif
+        if (this.sourceNode && this.sourceNodeStarted) {
+          this.isPlaying = false;
+          this.sourceNodeStarted = false;
+          this.pausedTime = 0;
+          this.currentTime = 0;
+          this.stopTimeUpdate();
+          if (this.onTimeUpdate) {
+            this.onTimeUpdate(0);
+          }
+        }
+      };
+
+      // Start dari posisi yang di-seek
+      this.startTime = this.audioContext.currentTime - seekTime;
+      this.sourceNode.start(0, seekTime);
+      this.sourceNodeStarted = true;
+      this.isPlaying = true;
+
+      // Start time update tracking (ini akan trigger onTimeUpdate secara berkala)
+      this.startTimeUpdate();
+      this.startGainReductionTracking();
+      
+      // Update time callback segera setelah seek (untuk UI update)
+      if (this.onTimeUpdate) {
+        this.onTimeUpdate(seekTime);
+      }
+    } else {
+      // Jika tidak playing, cukup update waktu
+      if (this.onTimeUpdate) {
+        this.onTimeUpdate(seekTime);
+      }
     }
   }
 
@@ -1222,6 +1319,75 @@ export class AudioEngine {
     }
 
     return waveform;
+  }
+
+  /**
+   * Get stereo waveform data from audio buffer (for DAW-style stereo visualization)
+   * Returns separate left and right channel data
+   */
+  getStereoWaveformData(width: number = 1000): { left: Float32Array; right: Float32Array } | null {
+    if (!this.audioBuffer) return null;
+
+    const numberOfChannels = this.audioBuffer.numberOfChannels;
+    const leftChannelData = this.audioBuffer.getChannelData(0);
+    
+    // Untuk stereo: ambil channel 1, untuk mono: copy channel 0 (bukan reference yang sama)
+    let rightChannelData: Float32Array;
+    if (numberOfChannels > 1) {
+      // Stereo: ambil channel 1 secara terpisah
+      rightChannelData = this.audioBuffer.getChannelData(1);
+      console.log('Stereo audio detected:', {
+        channels: numberOfChannels,
+        leftLength: leftChannelData.length,
+        rightLength: rightChannelData.length,
+        leftSample0: leftChannelData[0],
+        rightSample0: rightChannelData[0],
+        areDifferent: leftChannelData[0] !== rightChannelData[0]
+      });
+    } else {
+      // Mono: copy channel 0 ke array baru supaya tidak share reference
+      rightChannelData = new Float32Array(leftChannelData);
+      console.log('Mono audio detected, copying channel 0 to right');
+    }
+
+    const length = leftChannelData.length;
+    const samplesPerPixel = Math.floor(length / width);
+
+    const leftWaveform = new Float32Array(width);
+    const rightWaveform = new Float32Array(width);
+
+    for (let i = 0; i < width; i++) {
+      const start = i * samplesPerPixel;
+      const end = Math.min(start + samplesPerPixel, length);
+
+      // Get peak value in this range for left channel
+      let maxLeft = 0;
+      for (let j = start; j < end; j++) {
+        const abs = Math.abs(leftChannelData[j]);
+        if (abs > maxLeft) maxLeft = abs;
+      }
+      leftWaveform[i] = maxLeft;
+
+      // Get peak value in this range for right channel
+      let maxRight = 0;
+      for (let j = start; j < end; j++) {
+        const abs = Math.abs(rightChannelData[j]);
+        if (abs > maxRight) maxRight = abs;
+      }
+      rightWaveform[i] = maxRight;
+    }
+
+    console.log('Generated waveform arrays:', {
+      leftWaveformLength: leftWaveform.length,
+      rightWaveformLength: rightWaveform.length,
+      leftWaveform0: leftWaveform[0],
+      rightWaveform0: rightWaveform[0],
+      leftWaveform100: leftWaveform[100],
+      rightWaveform100: rightWaveform[100],
+      areSameArray: leftWaveform === rightWaveform
+    });
+
+    return { left: leftWaveform, right: rightWaveform };
   }
 
   getAnalysisData(): AudioAnalysisData | null {
@@ -1674,18 +1840,18 @@ export class AudioEngine {
         }
 
         // Update pre/de-emphasis filters based on mode
-      if (this.saturationPreEmphasis && this.saturationDeEmphasis) {
-        if (mode === 'tape') {
-          // Tape mode: gunakan pre/de-emphasis hanya saat mix full untuk mencegah artefak fase
-          const isFullWet = (settings.saturation.mix ?? this.currentSettings.saturation.mix) >= 100;
-          this.saturationPreEmphasis.gain.setValueAtTime(isFullWet ? 6 : 0, now); // +6dB boost
-          this.saturationDeEmphasis.gain.setValueAtTime(isFullWet ? -6 : 0, now); // -6dB cut
-        } else {
-          // Mode lain: bypass pre/de-emphasis
-          this.saturationPreEmphasis.gain.setValueAtTime(0, now);
-          this.saturationDeEmphasis.gain.setValueAtTime(0, now);
+        if (this.saturationPreEmphasis && this.saturationDeEmphasis) {
+          if (mode === 'tape') {
+            // Tape mode: gunakan pre/de-emphasis hanya saat mix full untuk mencegah artefak fase
+            const isFullWet = (settings.saturation.mix ?? this.currentSettings.saturation.mix) >= 100;
+            this.saturationPreEmphasis.gain.setValueAtTime(isFullWet ? 6 : 0, now); // +6dB boost
+            this.saturationDeEmphasis.gain.setValueAtTime(isFullWet ? -6 : 0, now); // -6dB cut
+          } else {
+            // Mode lain: bypass pre/de-emphasis
+            this.saturationPreEmphasis.gain.setValueAtTime(0, now);
+            this.saturationDeEmphasis.gain.setValueAtTime(0, now);
+          }
         }
-      }
       }
       if (this.saturationWetGain && this.saturationDryGain && settings.saturation.mix !== undefined) {
         // Jalur dry dimatikan untuk semua mode agar tidak ada comb/chorus,
