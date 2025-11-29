@@ -20,7 +20,26 @@ import { AudioEngineSettings } from '@/lib/audio/audioEngine';
 import { effectPresets } from '@/lib/audio/audioEffects';
 import { ToastContainer, type Toast } from '@/components/ui/Toast';
 
+interface DisclaimerProps {
+  text: string;
+}
+
+/**
+ * Menampilkan disclaimer singkat di halaman utama.
+ */
+function Disclaimer({ text }: DisclaimerProps) {
+  return (
+    <div className="mb-4 p-3 bg-zinc-800/40 border border-zinc-700 rounded-lg">
+      <p className="text-zinc-400 text-xs">{text}</p>
+    </div>
+  );
+}
+
 export function AudioMasteringPlugin() {
+  const FEATURE_HAAS = process.env.NEXT_PUBLIC_FEATURE_HAAS === 'true';
+  const FEATURE_REVERB = process.env.NEXT_PUBLIC_FEATURE_REVERB === 'true';
+  const FEATURE_HARMONIZER = process.env.NEXT_PUBLIC_FEATURE_HARMONIZER === 'true';
+  const DISCLAIMER_TEXT = process.env.NEXT_PUBLIC_DISCLAIMER_NO_STORAGE_TEXT || 'Kami tidak menyimpan data audio apapun di website ini.';
   const {
     isInitialized,
     isLoading,
@@ -87,6 +106,10 @@ export function AudioMasteringPlugin() {
   // Stereo Width states
   const [stereoEnabled, setStereoEnabled] = useState(true);
   const [stereoWidth, setStereoWidth] = useState(100);
+  // Haas widener states
+  const [haasEnabled, setHaasEnabled] = useState(false);
+  const [haasDelayMs, setHaasDelayMs] = useState(12);
+  const [haasMix, setHaasMix] = useState(30);
   
   // Harmonizer states
   const [harmonizerEnabled, setHarmonizerEnabled] = useState(true);
@@ -154,6 +177,11 @@ export function AudioMasteringPlugin() {
         enabled: stereoEnabled,
         width: stereoWidth,
       },
+      haas: {
+        enabled: haasEnabled,
+        delayMs: haasDelayMs,
+        mix: haasMix,
+      },
       harmonizer: {
         enabled: harmonizerEnabled,
         mix: harmonizerMix,
@@ -191,7 +219,7 @@ export function AudioMasteringPlugin() {
     inputGain, outputGain, 
     compressorEnabled, compThreshold, compRatio, compAttack, compRelease, compGain,
     limiterEnabled, limiterThreshold, 
-    stereoEnabled, stereoWidth, 
+    stereoEnabled, stereoWidth, haasEnabled, haasDelayMs, haasMix,
     harmonizerEnabled, harmonizerMix, harmonizerDepth, harmonizerTone,
     reverbEnabled, reverbMix, reverbSize, reverbDecay, reverbDamping, 
     saturationEnabled, saturationDrive, saturationMix, saturationBias, saturationMode,
@@ -238,11 +266,12 @@ export function AudioMasteringPlugin() {
       setCompressorEnabled(false);
       setLimiterEnabled(false);
       setStereoEnabled(false);
-      setHarmonizerEnabled(false);
-      setReverbEnabled(false);
-      setSaturationEnabled(false);
-      setMultibandEnabled(false);
-    } catch (err) {
+    setHarmonizerEnabled(false);
+    setReverbEnabled(false);
+    setSaturationEnabled(false);
+    setMultibandEnabled(false);
+    setHaasEnabled(false);
+  } catch (err) {
       console.error('Failed to load audio file:', err);
       Sentry.captureException(err, {
         tags: { component: 'AudioMasteringPlugin', action: 'loadAudioFile' },
@@ -370,6 +399,7 @@ export function AudioMasteringPlugin() {
     setHarmonizerEnabled(false);
     setReverbEnabled(false);
     setSaturationEnabled(false);
+    setHaasEnabled(false);
     
     if (settings.inputGain !== undefined) setInputGain(settings.inputGain);
     if (settings.outputGain !== undefined) setOutputGain(settings.outputGain);
@@ -390,6 +420,7 @@ export function AudioMasteringPlugin() {
       if (settings.stereoWidth.enabled !== undefined) setStereoEnabled(settings.stereoWidth.enabled);
       if (settings.stereoWidth.width !== undefined) setStereoWidth(settings.stereoWidth.width);
     }
+    // Abaikan HAAS dari preset hingga pengembangan ulang
     // Harmonizer, reverb, dan saturation diabaikan untuk semua preset
     if (settings.multibandCompressor) {
       if (settings.multibandCompressor.enabled !== undefined) setMultibandEnabled(settings.multibandCompressor.enabled);
@@ -604,6 +635,8 @@ export function AudioMasteringPlugin() {
           </button>
         </div>
       </div>
+
+      <Disclaimer text={DISCLAIMER_TEXT} />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -888,31 +921,71 @@ export function AudioMasteringPlugin() {
             </div>
           </div>
 
-          {/* Harmonizer */}
-          <Harmonizer 
-            enabled={harmonizerEnabled}
-            onToggle={setHarmonizerEnabled}
-            mix={harmonizerMix}
-            setMix={setHarmonizerMix}
-            depth={harmonizerDepth}
-            setDepth={setHarmonizerDepth}
-            tone={harmonizerTone}
-            setTone={setHarmonizerTone}
-          />
+          {FEATURE_HAAS && (
+            <div className={`bg-zinc-800/50 rounded-xl p-4 border ${haasEnabled ? 'border-zinc-700' : 'border-zinc-800 opacity-60'}`}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-zinc-400 text-xs tracking-wider">HAAS</h3>
+                <button
+                  onClick={() => setHaasEnabled(!haasEnabled)}
+                  className={`px-3 py-1 rounded text-xs transition-all ${
+                    haasEnabled 
+                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' 
+                      : 'bg-zinc-700 text-zinc-400'
+                  }`}
+                >
+                  {haasEnabled ? 'ON' : 'OFF'}
+                </button>
+              </div>
+              <div className={`grid grid-cols-2 gap-4 ${!haasEnabled ? 'pointer-events-none opacity-50' : ''}`}>
+                <Knob 
+                  value={haasDelayMs} 
+                  onChange={setHaasDelayMs}
+                  min={0}
+                  max={30}
+                  label="DELAY"
+                  unit="ms"
+                  size="small"
+                />
+                <Knob 
+                  value={haasMix} 
+                  onChange={setHaasMix}
+                  min={0}
+                  max={100}
+                  label="MIX"
+                  unit="%"
+                  size="small"
+                />
+              </div>
+            </div>
+          )}
 
-          {/* Reverb */}
-          <Reverb 
-            enabled={reverbEnabled}
-            onToggle={setReverbEnabled}
-            mix={reverbMix}
-            setMix={setReverbMix}
-            size={reverbSize}
-            setSize={setReverbSize}
-            decay={reverbDecay}
-            setDecay={setReverbDecay}
-            damping={reverbDamping}
-            setDamping={setReverbDamping}
-          />
+          {FEATURE_HARMONIZER && (
+            <Harmonizer 
+              enabled={harmonizerEnabled}
+              onToggle={setHarmonizerEnabled}
+              mix={harmonizerMix}
+              setMix={setHarmonizerMix}
+              depth={harmonizerDepth}
+              setDepth={setHarmonizerDepth}
+              tone={harmonizerTone}
+              setTone={setHarmonizerTone}
+            />
+          )}
+
+          {FEATURE_REVERB && (
+            <Reverb 
+              enabled={reverbEnabled}
+              onToggle={setReverbEnabled}
+              mix={reverbMix}
+              setMix={setReverbMix}
+              size={reverbSize}
+              setSize={setReverbSize}
+              decay={reverbDecay}
+              setDecay={setReverbDecay}
+              damping={reverbDamping}
+              setDamping={setReverbDamping}
+            />
+          )}
 
           {/* Saturation */}
           <Saturation 

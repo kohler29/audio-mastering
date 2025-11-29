@@ -17,6 +17,11 @@ export interface AudioEngineSettings {
     enabled: boolean;
     width: number;
   };
+  haas: {
+    enabled: boolean;
+    delayMs: number;
+    mix: number;
+  };
   harmonizer: {
     enabled: boolean;
     mix: number;
@@ -126,6 +131,18 @@ export class AudioEngine {
   private stereoLeftCrossfeed: GainNode | null = null;
   private stereoRightCrossfeed: GainNode | null = null;
   private stereoOutput: GainNode | null = null;
+  // Haas widener nodes
+  private haasSplitter: ChannelSplitterNode | null = null;
+  private haasMerger: ChannelMergerNode | null = null;
+  private haasLeftDelay: DelayNode | null = null;
+  private haasRightDelay: DelayNode | null = null;
+  private haasLeftDry: GainNode | null = null;
+  private haasRightDry: GainNode | null = null;
+  private haasLeftWet: GainNode | null = null;
+  private haasRightWet: GainNode | null = null;
+  private haasMix: GainNode | null = null;
+  private haasBypass: GainNode | null = null;
+  private haasOutput: GainNode | null = null;
   private multibandFilters: Array<{
     lowpass: BiquadFilterNode;
     highpass: BiquadFilterNode;
@@ -316,6 +333,9 @@ export class AudioEngine {
 
     // Stereo width
     this.setupStereoWidth(settings.stereoWidth.width);
+
+    // Haas widener
+    this.setupHaas(settings.haas);
 
     // Limiter (optimized for professional mastering)
     // Using higher ratio and optimized attack/release for smooth limiting
@@ -547,9 +567,38 @@ export class AudioEngine {
       }
     }
 
+    // Haas widener with bypass (always connect when stereo nodes exist)
+    let spatialInput: GainNode = stereoInput;
+    if (this.audioBuffer && this.audioBuffer.numberOfChannels >= 2 && this.haasSplitter && this.haasMerger && this.haasMix && this.haasBypass && this.haasOutput && this.haasLeftDelay && this.haasRightDelay && this.haasLeftDry && this.haasRightDry && this.haasLeftWet && this.haasRightWet) {
+      stereoInput.connect(this.haasSplitter);
+      this.haasSplitter.connect(this.haasLeftDry, 0);
+      this.haasSplitter.connect(this.haasLeftDelay, 0);
+      this.haasLeftDelay.connect(this.haasLeftWet);
+      this.haasSplitter.connect(this.haasRightDry, 1);
+      this.haasSplitter.connect(this.haasRightDelay, 1);
+      this.haasRightDelay.connect(this.haasRightWet);
+
+      const haasLeftSum = this.audioContext!.createGain();
+      const haasRightSum = this.audioContext!.createGain();
+      this.haasLeftDry.connect(haasLeftSum);
+      this.haasLeftWet.connect(haasLeftSum);
+      this.haasRightDry.connect(haasRightSum);
+      this.haasRightWet.connect(haasRightSum);
+
+      haasLeftSum.connect(this.haasMerger, 0, 0);
+      haasRightSum.connect(this.haasMerger, 0, 1);
+
+      this.haasMerger.connect(this.haasMix);
+      stereoInput.connect(this.haasBypass);
+      this.haasMix.connect(this.haasOutput);
+      this.haasBypass.connect(this.haasOutput);
+
+      spatialInput = this.haasOutput;
+    }
+
     // Limiter with bypass
-    stereoInput.connect(this.limiterNode!);
-    stereoInput.connect(this.limiterBypass!);
+    spatialInput.connect(this.limiterNode!);
+    spatialInput.connect(this.limiterBypass!);
     this.limiterNode!.connect(this.limiterMix!);
     this.limiterMix!.connect(this.limiterOutput!);
     this.limiterBypass!.connect(this.limiterOutput!);
@@ -646,6 +695,42 @@ export class AudioEngine {
 
     // Update current settings
     this.currentSettings.reverb = { ...settings };
+  }
+
+  /**
+   * Setup Haas widener nodes
+   */
+  private setupHaas(settings: { enabled: boolean; delayMs: number; mix: number }): void {
+    if (!this.audioContext) return;
+
+    this.haasSplitter = this.audioContext.createChannelSplitter(2);
+    this.haasMerger = this.audioContext.createChannelMerger(2);
+
+    this.haasLeftDelay = this.audioContext.createDelay(0.05);
+    this.haasRightDelay = this.audioContext.createDelay(0.05);
+    const delaySec = Math.min(0.03, Math.max(0, settings.delayMs / 1000));
+    this.haasLeftDelay.delayTime.value = 0;
+    this.haasRightDelay.delayTime.value = delaySec;
+
+    this.haasLeftDry = this.audioContext.createGain();
+    this.haasRightDry = this.audioContext.createGain();
+    this.haasLeftWet = this.audioContext.createGain();
+    this.haasRightWet = this.audioContext.createGain();
+
+    const wet = settings.mix / 100;
+    const dry = 1 - wet;
+    this.haasLeftDry.gain.value = dry;
+    this.haasRightDry.gain.value = dry;
+    this.haasLeftWet.gain.value = wet;
+    this.haasRightWet.gain.value = wet;
+
+    this.haasMix = this.audioContext.createGain();
+    this.haasBypass = this.audioContext.createGain();
+    this.haasMix.gain.value = settings.enabled ? 1 : 0;
+    this.haasBypass.gain.value = settings.enabled ? 0 : 1;
+    this.haasOutput = this.audioContext.createGain();
+
+    this.currentSettings.haas = { ...settings };
   }
 
   /**
@@ -1942,6 +2027,27 @@ export class AudioEngine {
       }
     }
 
+    // Update Haas widener
+    if (settings.haas) {
+      if (this.haasMix && this.haasBypass && settings.haas.enabled !== undefined) {
+        this.haasMix.gain.setValueAtTime(settings.haas.enabled ? 1 : 0, now);
+        this.haasBypass.gain.setValueAtTime(settings.haas.enabled ? 0 : 1, now);
+      }
+      if (this.haasLeftDelay && this.haasRightDelay && settings.haas.delayMs !== undefined) {
+        const delaySec = Math.min(0.03, Math.max(0, settings.haas.delayMs / 1000));
+        this.haasLeftDelay.delayTime.setValueAtTime(0, now);
+        this.haasRightDelay.delayTime.setValueAtTime(delaySec, now);
+      }
+      if (this.haasLeftDry && this.haasRightDry && this.haasLeftWet && this.haasRightWet && settings.haas.mix !== undefined) {
+        const wet = settings.haas.mix / 100;
+        const dry = 1 - wet;
+        this.haasLeftDry.gain.setValueAtTime(dry, now);
+        this.haasRightDry.gain.setValueAtTime(dry, now);
+        this.haasLeftWet.gain.setValueAtTime(wet, now);
+        this.haasRightWet.gain.setValueAtTime(wet, now);
+      }
+    }
+
     // Update multiband compressor parameters
     if (settings.multibandCompressor) {
       if (settings.multibandCompressor.enabled !== undefined) {
@@ -1999,6 +2105,7 @@ export class AudioEngine {
     compressor: { enabled: true, threshold: -20, ratio: 4, attack: 10, release: 100, gain: 0 },
     limiter: { enabled: true, threshold: -0.3 },
     stereoWidth: { enabled: true, width: 100 },
+    haas: { enabled: false, delayMs: 12, mix: 30 },
     harmonizer: { enabled: false, mix: 0, depth: 0, tone: 0 },
     reverb: { enabled: false, mix: 0, size: 0, decay: 0, damping: 0 },
     saturation: { enabled: true, drive: 25, mix: 40, bias: 0, mode: 'soft' },
@@ -2233,6 +2340,40 @@ export class AudioEngine {
       } catch {
         // Ignore
       }
+    }
+    // Cleanup Haas
+    if (this.haasSplitter) {
+      try { this.haasSplitter.disconnect(); } catch { }
+    }
+    if (this.haasMerger) {
+      try { this.haasMerger.disconnect(); } catch { }
+    }
+    if (this.haasLeftDelay) {
+      try { this.haasLeftDelay.disconnect(); } catch { }
+    }
+    if (this.haasRightDelay) {
+      try { this.haasRightDelay.disconnect(); } catch { }
+    }
+    if (this.haasLeftDry) {
+      try { this.haasLeftDry.disconnect(); } catch { }
+    }
+    if (this.haasRightDry) {
+      try { this.haasRightDry.disconnect(); } catch { }
+    }
+    if (this.haasLeftWet) {
+      try { this.haasLeftWet.disconnect(); } catch { }
+    }
+    if (this.haasRightWet) {
+      try { this.haasRightWet.disconnect(); } catch { }
+    }
+    if (this.haasMix) {
+      try { this.haasMix.disconnect(); } catch { }
+    }
+    if (this.haasBypass) {
+      try { this.haasBypass.disconnect(); } catch { }
+    }
+    if (this.haasOutput) {
+      try { this.haasOutput.disconnect(); } catch { }
     }
   }
 
@@ -2671,9 +2812,48 @@ export class AudioEngine {
         merger.connect(stereoOutput);
       }
 
+      // Haas widener (optional, after stereo width)
+      let spatialOutput: GainNode = stereoOutput;
+      if (settings.haas.enabled && numberOfChannels >= 2) {
+        const haasSplitter = offlineContext.createChannelSplitter(2);
+        const haasMerger = offlineContext.createChannelMerger(2);
+        const leftDelay = offlineContext.createDelay(0.05);
+        const rightDelay = offlineContext.createDelay(0.05);
+        const delaySec = Math.min(0.03, Math.max(0, settings.haas.delayMs / 1000));
+        leftDelay.delayTime.value = 0;
+        rightDelay.delayTime.value = delaySec;
+        const leftDry = offlineContext.createGain();
+        const rightDry = offlineContext.createGain();
+        const leftWet = offlineContext.createGain();
+        const rightWet = offlineContext.createGain();
+        const wet = settings.haas.mix / 100;
+        const dry = 1 - wet;
+        leftDry.gain.value = dry;
+        rightDry.gain.value = dry;
+        leftWet.gain.value = wet;
+        rightWet.gain.value = wet;
+        stereoOutput.connect(haasSplitter);
+        haasSplitter.connect(leftDry, 0);
+        haasSplitter.connect(leftDelay, 0);
+        leftDelay.connect(leftWet);
+        haasSplitter.connect(rightDry, 1);
+        haasSplitter.connect(rightDelay, 1);
+        rightDelay.connect(rightWet);
+        const leftSum = offlineContext.createGain();
+        const rightSum = offlineContext.createGain();
+        leftDry.connect(leftSum);
+        leftWet.connect(leftSum);
+        rightDry.connect(rightSum);
+        rightWet.connect(rightSum);
+        leftSum.connect(haasMerger, 0, 0);
+        rightSum.connect(haasMerger, 0, 1);
+        spatialOutput = offlineContext.createGain();
+        haasMerger.connect(spatialOutput);
+      }
+
       // Limiter with bypass
-      stereoOutput.connect(limiter);
-      stereoOutput.connect(limiterBypass);
+      spatialOutput.connect(limiter);
+      spatialOutput.connect(limiterBypass);
       limiter.connect(limiterMix);
       limiterMix.connect(limiterOutput);
       limiterBypass.connect(limiterOutput);
@@ -2949,6 +3129,45 @@ export class AudioEngine {
       merger.connect(stereoOutput);
     }
 
+    // Haas widener for loudness measurement chain (keep consistent)
+    let spatialOutputLM: GainNode = stereoOutput;
+    if (settings.haas.enabled && numberOfChannels >= 2) {
+      const haasSplitter = offlineContext.createChannelSplitter(2);
+      const haasMerger = offlineContext.createChannelMerger(2);
+      const leftDelay = offlineContext.createDelay(0.05);
+      const rightDelay = offlineContext.createDelay(0.05);
+      const delaySec = Math.min(0.03, Math.max(0, settings.haas.delayMs / 1000));
+      leftDelay.delayTime.value = 0;
+      rightDelay.delayTime.value = delaySec;
+      const leftDry = offlineContext.createGain();
+      const rightDry = offlineContext.createGain();
+      const leftWet = offlineContext.createGain();
+      const rightWet = offlineContext.createGain();
+      const wet = settings.haas.mix / 100;
+      const dry = 1 - wet;
+      leftDry.gain.value = dry;
+      rightDry.gain.value = dry;
+      leftWet.gain.value = wet;
+      rightWet.gain.value = wet;
+      stereoOutput.connect(haasSplitter);
+      haasSplitter.connect(leftDry, 0);
+      haasSplitter.connect(leftDelay, 0);
+      leftDelay.connect(leftWet);
+      haasSplitter.connect(rightDry, 1);
+      haasSplitter.connect(rightDelay, 1);
+      rightDelay.connect(rightWet);
+      const leftSum = offlineContext.createGain();
+      const rightSum = offlineContext.createGain();
+      leftDry.connect(leftSum);
+      leftWet.connect(leftSum);
+      rightDry.connect(rightSum);
+      rightWet.connect(rightSum);
+      leftSum.connect(haasMerger, 0, 0);
+      rightSum.connect(haasMerger, 0, 1);
+      spatialOutputLM = offlineContext.createGain();
+      haasMerger.connect(spatialOutputLM);
+    }
+
     const limiter = offlineContext.createDynamicsCompressor();
     limiter.threshold.value = settings.limiter.threshold;
     limiter.ratio.value = 20;
@@ -2965,8 +3184,8 @@ export class AudioEngine {
     outputGain.gain.value = this.dbToGain(settings.outputGain);
 
     source.connect(inputGain);
-    stereoOutput.connect(limiter);
-    stereoOutput.connect(limiterBypass);
+    spatialOutputLM.connect(limiter);
+    spatialOutputLM.connect(limiterBypass);
     limiter.connect(limiterMix);
     limiterMix.connect(limiterOutput);
     limiterBypass.connect(limiterOutput);
