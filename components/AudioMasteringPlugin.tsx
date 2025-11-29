@@ -653,7 +653,7 @@ export function AudioMasteringPlugin() {
                   step="0.1"
                   value={targetLUFS}
                   onChange={(e) => setTargetLUFS(Number(e.target.value))}
-                  className="w-full bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs"
+                  className="w-full bg-zinc-700 text-zinc-100 px-3 py-2 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs"
                 />
               </div>
               <div className="flex items-end">
