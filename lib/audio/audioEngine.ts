@@ -93,6 +93,11 @@ export class AudioEngine {
   private saturationDCBlocker: BiquadFilterNode | null = null;
   private saturationPreEmphasis: BiquadFilterNode | null = null;
   private saturationDeEmphasis: BiquadFilterNode | null = null;
+  private saturationPreGain: GainNode | null = null;
+  private saturationPostHPF: BiquadFilterNode | null = null;
+  private saturationPostHighShelf: BiquadFilterNode | null = null;
+  private saturationPostLPF: BiquadFilterNode | null = null;
+  private saturationCeilGain: GainNode | null = null;
   // Harmonizer nodes
   private harmonizerDelay1: DelayNode | null = null;
   private harmonizerDelay2: DelayNode | null = null;
@@ -379,33 +384,48 @@ export class AudioEngine {
     this.reverbMix!.connect(this.reverbOutput!);
     this.reverbBypass!.connect(this.reverbOutput!);
 
-    // Saturation with bypass and professional filtering
+    // Saturation dengan crossfade internal: Input → PreGain → WaveShaper → Mix → PostFilters → Output
     const saturationInput = this.reverbOutput!;
-    if (this.saturationNode && this.saturationWetGain && this.saturationDryGain &&
-      this.saturationDCBlocker && this.saturationPreEmphasis && this.saturationDeEmphasis) {
-      // Professional saturation signal chain:
-      // Input → DC Blocker → Pre-emphasis → Saturation → De-emphasis → Wet Gain
+    if (this.saturationNode && this.saturationWetGain && this.saturationDryGain && this.saturationPreGain) {
+      // Input menuju PreGain
+      saturationInput.connect(this.saturationPreGain);
 
-      // Connect dry path (bypass saturation processing)
-      saturationInput.connect(this.saturationDryGain);
+      // Dry mengambil dari PreGain (fase identik)
+      this.saturationPreGain.connect(this.saturationDryGain);
 
-      // Connect wet path with full processing chain
-      saturationInput.connect(this.saturationDCBlocker);
-      this.saturationDCBlocker.connect(this.saturationPreEmphasis);
-      this.saturationPreEmphasis.connect(this.saturationNode);
-      this.saturationNode.connect(this.saturationDeEmphasis);
-      this.saturationDeEmphasis.connect(this.saturationWetGain);
+      // Wet: PreGain → WaveShaper
+      this.saturationPreGain.connect(this.saturationNode);
+      this.saturationNode.connect(this.saturationWetGain);
 
-      // Mix wet and dry signals using GainNode (not ChannelMerger)
+      // Campurkan wet/dry
       const saturationMixNode = this.audioContext.createGain();
       this.saturationWetGain.connect(saturationMixNode);
       this.saturationDryGain.connect(saturationMixNode);
       saturationMixNode.connect(this.saturationMix!);
+
+      if (this.saturationCeilGain) {
+        this.saturationMix!.connect(this.saturationCeilGain);
+        if (this.saturationPostHPF && this.saturationPostLPF && this.saturationPostHighShelf) {
+          this.saturationCeilGain.connect(this.saturationPostHPF);
+          this.saturationPostHPF.connect(this.saturationPostLPF);
+          this.saturationPostLPF.connect(this.saturationPostHighShelf);
+          this.saturationPostHighShelf.connect(this.saturationOutput!);
+        } else {
+          this.saturationCeilGain.connect(this.saturationOutput!);
+        }
+      } else {
+        this.saturationMix!.connect(this.saturationOutput!);
+      }
     } else {
       saturationInput.connect(this.saturationMix!);
+      if (this.saturationCeilGain) {
+        this.saturationMix!.connect(this.saturationCeilGain);
+        this.saturationCeilGain.connect(this.saturationOutput!);
+      } else {
+        this.saturationMix!.connect(this.saturationOutput!);
+      }
     }
     saturationInput.connect(this.saturationBypass!);
-    this.saturationMix!.connect(this.saturationOutput!);
     this.saturationBypass!.connect(this.saturationOutput!);
 
     // Harmonizer with bypass (delay-based chorus effect)
@@ -614,6 +634,15 @@ export class AudioEngine {
     this.currentSettings.reverb = { ...settings };
   }
 
+  /**
+   * Membuat node saturasi dengan kontrol drive/mix/bias dan mode.
+   * Untuk mencegah artefak flanger/comb-filter saat mix < 100% pada mode 'tape',
+   * pre/de-emphasis akan dinonaktifkan sehingga fase wet/dry tetap selaras.
+   */
+  /**
+   * Algoritma saturasi dengan mode tube/tape/soft;
+   * mencakup kompensasi gain berbasis RMS untuk level yang konsisten.
+   */
   private createSaturationNode(settings: { drive: number; mix: number; bias: number; mode: 'tube' | 'tape' | 'soft' }): WaveShaperNode {
     if (!this.audioContext) {
       throw new Error('Audio context not initialized');
@@ -626,8 +655,8 @@ export class AudioEngine {
     this.saturationDCBlocker.frequency.value = 20;
     this.saturationDCBlocker.Q.value = 0.707; // Butterworth response
 
-    // Create pre-emphasis filter for tape mode
-    // Boosts high frequencies before saturation (like real tape machines)
+      // Create pre-emphasis filter untuk tape mode
+      // Boosts high frequencies before saturation (like real tape machines)
     this.saturationPreEmphasis = this.audioContext.createBiquadFilter();
     this.saturationPreEmphasis.type = 'highshelf';
     this.saturationPreEmphasis.frequency.value = 3000; // 3kHz
@@ -636,17 +665,18 @@ export class AudioEngine {
     // Create de-emphasis filter for tape mode
     // Cuts high frequencies after saturation to compensate pre-emphasis
     this.saturationDeEmphasis = this.audioContext.createBiquadFilter();
-    this.saturationDeEmphasis.type = 'lowshelf';
+    this.saturationDeEmphasis.type = 'highshelf';
     this.saturationDeEmphasis.frequency.value = 3000; // 3kHz
     this.saturationDeEmphasis.Q.value = 0.707;
 
-    // Set pre/de-emphasis gains based on mode
+    // Set pre/de-emphasis gains berdasarkan mode
     if (settings.mode === 'tape') {
-      // Tape mode: use pre/de-emphasis for authentic tape sound
-      this.saturationPreEmphasis.gain.value = 6; // +6dB boost
-      this.saturationDeEmphasis.gain.value = -6; // -6dB cut
+      const isFullWet = settings.mix >= 100;
+      // Aktifkan pre/de-emphasis hanya saat full wet untuk mencegah perbedaan fase saat di-blend
+      this.saturationPreEmphasis.gain.value = isFullWet ? 6 : 0;
+      this.saturationDeEmphasis.gain.value = isFullWet ? -6 : 0;
     } else {
-      // Other modes: bypass pre/de-emphasis
+      // Mode selain 'tape': bypass pre/de-emphasis
       this.saturationPreEmphasis.gain.value = 0;
       this.saturationDeEmphasis.gain.value = 0;
     }
@@ -654,13 +684,15 @@ export class AudioEngine {
     this.saturationNode = this.audioContext.createWaveShaper();
     const drive = settings.drive / 100;
     const bias = settings.bias / 100;
-    const curve = new Float32Array(65536);
+    const mixValue = settings.mix / 100;
+    const size = 65536;
+    const curve = new Float32Array(size);
+    // Soft mode: gunakan ceiling sedikit lebih rendah, tapi tetap cukup lebar untuk headroom
+    const hardLimit = settings.mode === 'soft' ? 0.9 : 0.98;
+    let sumInSq = 0;
+    let sumOutSq = 0;
 
-    // Calculate auto gain compensation based on drive amount
-    // Higher drive = more gain reduction needed to maintain perceived loudness
-    const autoGainCompensation = 1 / (1 + drive * 0.5);
-
-    for (let i = 0; i < 65536; i++) {
+    for (let i = 0; i < size; i++) {
       const x = (i - 32768) / 32768;
       let saturated: number;
 
@@ -716,60 +748,100 @@ export class AudioEngine {
 
         case 'soft':
         default:
-          // Soft saturation: Console-style (Neve/API/SSL modeling)
-          // Natural, musical saturation with minimal artifacts
-          // Uses optimized polynomial for smooth, transparent saturation
-          const softGain = 1 + drive * 2.5;
-          const input = x * softGain;
-
-          // Improved soft clipping polynomial with better harmonic structure
-          // Uses Chebyshev polynomial approximation for smooth saturation
-          if (Math.abs(input) <= 0.5) {
-            // Linear region (no saturation)
-            saturated = input;
-          } else if (Math.abs(input) <= 1.0) {
-            // Soft knee region (smooth transition)
-            const sign = Math.sign(input);
-            const absInput = Math.abs(input);
-            // Smooth polynomial: 1.5x - 0.5x^3
-            saturated = sign * (1.5 * absInput - 0.5 * absInput * absInput * absInput);
-          } else {
-            // Hard limit region (gentle clipping)
-            saturated = Math.sign(input) * 0.875; // Slightly below 1.0 for headroom
+          // Soft saturation: simple analog-style tanh (paling halus, tanpa pecah/kasar)
+          // Drive mengatur seberapa keras sinyal mendorong tanh
+          {
+            const softGain = 1 + drive * 2.0;
+            const biased = x + bias * 0.15; // sedikit bias seperti analog, tapi tidak berlebihan
+            const input = biased * softGain;
+            // Satu kurva tanh yang smooth, tanpa piecewise polynomial
+            saturated = Math.tanh(input);
           }
-
-          // Add subtle harmonic enhancement (console-style)
-          saturated += Math.sin(input * Math.PI * 0.3) * 0.02 * drive;
-
-          // Minimal bias for natural sound
-          saturated += bias * 0.06;
           break;
       }
 
-      // Apply auto gain compensation to maintain perceived loudness
-      saturated *= autoGainCompensation;
+      // Blend saturasi dengan sinyal original di dalam kurva (seri-style)
+      const blended = x + mixValue * (saturated - x);
 
-      // Clamp to [-1, 1] to prevent clipping and NaN
-      // Use slightly softer limit to prevent harsh digital clipping
-      curve[i] = Math.max(-0.98, Math.min(0.98, saturated));
+      // Clamp untuk mencegah clipping/crackle, limit disesuaikan mode
+      const y = Math.max(-hardLimit, Math.min(hardLimit, blended));
+      curve[i] = y;
+      sumInSq += x * x;
+      sumOutSq += y * y;
+    }
+
+    const rmsIn = Math.sqrt(sumInSq / size);
+    const rmsOut = Math.sqrt(sumOutSq / size);
+    let compensation = rmsOut > 0 ? rmsIn / rmsOut : 1;
+    // Auto-gain: jaga level relatif konsisten tapi jangan terlalu agresif
+    compensation = Math.min(1.2, Math.max(0.5, compensation));
+    if (settings.mode === 'soft') {
+      // Soft: sedikit lebih kalem supaya tidak mengangkat peak berlebihan
+      compensation = Math.min(compensation, 0.9);
+    }
+
+    for (let i = 0; i < size; i++) {
+      curve[i] = Math.max(-0.98, Math.min(0.98, curve[i] * compensation));
     }
 
     this.saturationNode.curve = curve;
-    // Use 4x oversampling to reduce aliasing artifacts
-    // This is crucial for high-quality analog modeling
-    this.saturationNode.oversample = '4x';
+    // Soft mode tetap pakai 4x oversampling untuk mengurangi aliasing/crackle
+    this.saturationNode.oversample = (settings.mode === 'soft' || settings.mix >= 100 ? '4x' : 'none');
 
     // Mix control with proper gain staging
     this.saturationDryGain = this.audioContext.createGain();
     this.saturationWetGain = this.audioContext.createGain();
+    // Pre-gain untuk jalur Input → WaveShaper
+    this.saturationPreGain = this.audioContext.createGain();
+    // Kembalikan ke 1.0 supaya bentuk kurva sama seperti sebelumnya
+    this.saturationPreGain.gain.value = 1.0;
 
-    // Equal-power crossfade for smooth mixing
-    const mixValue = settings.mix / 100;
-    const dryGain = Math.cos(mixValue * Math.PI / 2);
-    const wetGain = Math.sin(mixValue * Math.PI / 2);
+    // Post filter setelah mix untuk tone analog dan bebas fase
+    this.saturationPostHPF = this.audioContext.createBiquadFilter();
+    this.saturationPostHPF.type = 'highpass';
+    this.saturationPostHPF.frequency.value = 20;
+    this.saturationPostHPF.Q.value = 0.707;
+
+    this.saturationPostLPF = this.audioContext.createBiquadFilter();
+    this.saturationPostLPF.type = 'lowpass';
+    // Kembalikan LPF soft ke 14k agar karakter high-end tidak berubah banyak
+    this.saturationPostLPF.frequency.value = (settings.mode === 'soft' ? 14000 : 16000);
+    this.saturationPostLPF.Q.value = 0.707;
+
+    this.saturationPostHighShelf = this.audioContext.createBiquadFilter();
+    this.saturationPostHighShelf.type = 'highshelf';
+    this.saturationPostHighShelf.frequency.value = 6000;
+    this.saturationPostHighShelf.Q.value = 0.707;
+    switch (settings.mode) {
+      case 'tape':
+        this.saturationPostHighShelf.gain.value = -4;
+        break;
+      case 'tube':
+        this.saturationPostHighShelf.gain.value = -2;
+        break;
+      case 'soft':
+      default:
+        // Soft: biarkan netral (0 dB) supaya tidak terasa seperti chorus/phasey
+        this.saturationPostHighShelf.gain.value = -5;
+        break;
+    }
+
+    // Semua mode: gunakan hanya jalur wet (seri-style), dry = 0 untuk menghindari comb/chorus
+    const dryGain = 0;
+    const wetGain = 1;
 
     this.saturationDryGain.gain.value = dryGain;
     this.saturationWetGain.gain.value = wetGain;
+
+    this.saturationCeilGain = this.audioContext.createGain();
+    if (settings.mode === 'soft') {
+      const sumWeights = dryGain + wetGain;
+      const targetPeak = 0.9;
+      const ceil = Math.min(1.0, targetPeak / Math.max(0.001, sumWeights));
+      this.saturationCeilGain.gain.value = ceil;
+    } else {
+      this.saturationCeilGain.gain.value = 1.0;
+    }
 
     return this.saturationNode;
   }
@@ -1512,16 +1584,19 @@ export class AudioEngine {
     if (settings.saturation && this.saturationNode) {
       if (settings.saturation.drive !== undefined ||
         settings.saturation.bias !== undefined ||
-        settings.saturation.mode !== undefined) {
+        settings.saturation.mode !== undefined ||
+        settings.saturation.mix !== undefined) {
         const drive = (settings.saturation.drive ?? this.currentSettings.saturation.drive);
         const bias = (settings.saturation.bias ?? this.currentSettings.saturation.bias);
         const mode = (settings.saturation.mode ?? this.currentSettings.saturation.mode);
-        const cacheKey = `${mode}_${Math.round(drive)}_${Math.round(bias)}`;
+        const mix = (settings.saturation.mix ?? this.currentSettings.saturation.mix);
+        const cacheKey = `${mode}_${Math.round(drive)}_${Math.round(bias)}_${Math.round(mix)}`;
         let curve = this.saturationCurveCache.get(cacheKey);
 
         if (!curve) {
           const driveValue = drive / 100;
           const biasValue = bias / 100;
+          const mixValue = mix / 100;
           curve = new Float32Array(65536);
 
           // Calculate auto gain compensation
@@ -1563,30 +1638,24 @@ export class AudioEngine {
 
               case 'soft':
               default:
-                // Soft saturation: Console-style
-                const softGain = 1 + driveValue * 2.5;
-                const input = x * softGain;
-
-                if (Math.abs(input) <= 0.5) {
-                  saturated = input;
-                } else if (Math.abs(input) <= 1.0) {
-                  const sign = Math.sign(input);
-                  const absInput = Math.abs(input);
-                  saturated = sign * (1.5 * absInput - 0.5 * absInput * absInput * absInput);
-                } else {
-                  saturated = Math.sign(input) * 0.875;
+                // Soft saturation: samakan dengan createSaturationNode (simple tanh analog-style)
+                {
+                  const softGain = 1 + driveValue * 2.0;
+                  const biased = x + biasValue * 0.15;
+                  const input = biased * softGain;
+                  saturated = Math.tanh(input);
                 }
-
-                saturated += Math.sin(input * Math.PI * 0.3) * 0.02 * driveValue;
-                saturated += biasValue * 0.06;
                 break;
             }
 
+            // Blend saturasi dengan sinyal original di dalam kurva (seri-style)
+            const blended = x + mixValue * (saturated - x);
+
             // Apply auto gain compensation
-            saturated *= autoGainCompensation;
+            const compensated = blended * autoGainCompensation;
 
             // Clamp to prevent clipping
-            curve[i] = Math.max(-0.98, Math.min(0.98, saturated));
+            curve[i] = Math.max(-0.98, Math.min(0.98, compensated));
           }
 
           // Cache curve
@@ -1605,26 +1674,24 @@ export class AudioEngine {
         }
 
         // Update pre/de-emphasis filters based on mode
-        if (this.saturationPreEmphasis && this.saturationDeEmphasis) {
-          if (mode === 'tape') {
-            // Tape mode: use pre/de-emphasis for authentic tape sound
-            this.saturationPreEmphasis.gain.setValueAtTime(6, now); // +6dB boost
-            this.saturationDeEmphasis.gain.setValueAtTime(-6, now); // -6dB cut
-          } else {
-            // Other modes: bypass pre/de-emphasis
-            this.saturationPreEmphasis.gain.setValueAtTime(0, now);
-            this.saturationDeEmphasis.gain.setValueAtTime(0, now);
-          }
+      if (this.saturationPreEmphasis && this.saturationDeEmphasis) {
+        if (mode === 'tape') {
+          // Tape mode: gunakan pre/de-emphasis hanya saat mix full untuk mencegah artefak fase
+          const isFullWet = (settings.saturation.mix ?? this.currentSettings.saturation.mix) >= 100;
+          this.saturationPreEmphasis.gain.setValueAtTime(isFullWet ? 6 : 0, now); // +6dB boost
+          this.saturationDeEmphasis.gain.setValueAtTime(isFullWet ? -6 : 0, now); // -6dB cut
+        } else {
+          // Mode lain: bypass pre/de-emphasis
+          this.saturationPreEmphasis.gain.setValueAtTime(0, now);
+          this.saturationDeEmphasis.gain.setValueAtTime(0, now);
         }
       }
+      }
       if (this.saturationWetGain && this.saturationDryGain && settings.saturation.mix !== undefined) {
-        // Equal-power crossfade for smooth mixing
-        const mixValue = settings.saturation.mix / 100;
-        const dryGain = Math.cos(mixValue * Math.PI / 2);
-        const wetGain = Math.sin(mixValue * Math.PI / 2);
-
-        this.saturationDryGain.gain.setValueAtTime(dryGain, now);
-        this.saturationWetGain.gain.setValueAtTime(wetGain, now);
+        // Jalur dry dimatikan untuk semua mode agar tidak ada comb/chorus,
+        // mix di-handle langsung di kurva (createSaturationNode / cache).
+        this.saturationDryGain.gain.setValueAtTime(0, now);
+        this.saturationWetGain.gain.setValueAtTime(1, now);
       }
       if (settings.saturation.enabled !== undefined && this.saturationMix && this.saturationBypass) {
         this.saturationMix.gain.setValueAtTime(settings.saturation.enabled ? 1 : 0, now);
@@ -1736,14 +1803,17 @@ export class AudioEngine {
     this.currentSettings = newSettings;
   }
 
+  /**
+   * Default settings: Harmonizer (chorus) dimatikan agar Saturation tidak terdengar flanger.
+   */
   private currentSettings: AudioEngineSettings = {
     inputGain: 0,
     outputGain: 0,
     compressor: { enabled: true, threshold: -20, ratio: 4, attack: 10, release: 100, gain: 0 },
     limiter: { enabled: true, threshold: -0.3 },
     stereoWidth: { enabled: true, width: 100 },
-    harmonizer: { enabled: true, mix: 30, depth: 50, tone: 0 },
-    reverb: { enabled: true, mix: 20, size: 50, decay: 2.5, damping: 50 },
+    harmonizer: { enabled: false, mix: 0, depth: 0, tone: 0 },
+    reverb: { enabled: false, mix: 0, size: 0, decay: 0, damping: 0 },
     saturation: { enabled: true, drive: 25, mix: 40, bias: 0, mode: 'soft' },
     multibandCompressor: {
       enabled: true,
@@ -2118,48 +2188,89 @@ export class AudioEngine {
       compressorBypass.gain.value = settings.compressor.enabled ? 0 : 1;
       const compressorOutput = offlineContext.createGain();
 
-      // Saturation
+      // Saturation (disamakan dengan path real-time: kurva & cara mix)
       const saturationNode = offlineContext.createWaveShaper();
-      const drive = settings.saturation.drive / 100;
-      const bias = settings.saturation.bias / 100;
-      const mode = settings.saturation.mode || 'soft';
-      const curve = new Float32Array(65536);
+      const satDrive = settings.saturation.drive;
+      const satBias = settings.saturation.bias;
+      const satMode = settings.saturation.mode || 'soft';
+      const satMix = settings.saturation.mix;
+      const satCurve = new Float32Array(65536);
+      const satHardLimit = satMode === 'soft' ? 0.9 : 0.98;
+      let satSumInSq = 0;
+      let satSumOutSq = 0;
+
       for (let i = 0; i < 65536; i++) {
         const x = (i - 32768) / 32768;
         let saturated: number;
 
-        // Different saturation curves for different modes
-        switch (mode) {
-          case 'tube':
-            // Tube saturation: smooth, warm, even harmonics
-            saturated = Math.tanh(x * (1 + drive * 2.5)) + bias * 0.15;
-            if (x > 0) {
-              saturated *= 0.98; // Slight compression on positive side
+        // Gunakan model yang sama dengan createSaturationNode / updateSettings
+        switch (satMode) {
+          case 'tube': {
+            const drive = satDrive / 100;
+            const bias = satBias / 100;
+            const tubeGain = 1 + drive * 4.0;
+            const tubeInput = x * tubeGain;
+            if (tubeInput >= 0) {
+              saturated = Math.tanh(tubeInput * 0.9) * 1.05;
+            } else {
+              saturated = Math.tanh(tubeInput * 1.1) * 0.95;
             }
+            saturated += Math.sin(tubeInput * Math.PI * 0.5) * 0.05 * drive;
+            saturated += bias * 0.12;
             break;
-          case 'tape':
-            // Tape saturation: smooth compression
-            const tapeDrive = 1 + drive * 1.5;
-            saturated = Math.sign(x) * (1 - Math.exp(-Math.abs(x) * tapeDrive)) / tapeDrive;
+          }
+          case 'tape': {
+            const drive = satDrive / 100;
+            const bias = satBias / 100;
+            const tapeGain = 1 + drive * 3.5;
+            const tapeInput = x * tapeGain;
+            const tapeBase = (2 / Math.PI) * Math.atan(tapeInput * Math.PI / 2);
+            const tapeCompression = tapeInput / (1 + Math.abs(tapeInput) * 0.5);
+            saturated = tapeBase * 0.7 + tapeCompression * 0.3;
+            saturated += Math.sin(tapeInput * Math.PI) * 0.03 * drive;
             saturated += bias * 0.1;
             break;
+          }
           case 'soft':
-          default:
-            // Soft saturation: gentle tanh
-            saturated = Math.tanh(x * (1 + drive * 2)) + bias * 0.1;
+          default: {
+            const drive = satDrive / 100;
+            const bias = satBias / 100;
+            const softGain = 1 + drive * 2.0;
+            const biased = x + bias * 0.15;
+            const input = biased * softGain;
+            saturated = Math.tanh(input);
             break;
+          }
         }
 
-        // Clamp to [-1, 1] to prevent clipping and NaN
-        curve[i] = Math.max(-1, Math.min(1, saturated));
+        // Seri-style mix di dalam kurva: samakan dengan path real-time
+        const mixValue = satMix / 100;
+        const blended = x + mixValue * (saturated - x);
+
+        const y = Math.max(-satHardLimit, Math.min(satHardLimit, blended));
+        satCurve[i] = y;
+        satSumInSq += x * x;
+        satSumOutSq += y * y;
       }
-      saturationNode.curve = curve;
-      saturationNode.oversample = '4x';
+
+      let satCompensation = satSumOutSq > 0 ? Math.sqrt(satSumInSq / satCurve.length) / Math.sqrt(satSumOutSq / satCurve.length) : 1;
+      satCompensation = Math.min(1.2, Math.max(0.5, satCompensation));
+      if (satMode === 'soft') {
+        satCompensation = Math.min(satCompensation, 0.9);
+      }
+
+      for (let i = 0; i < satCurve.length; i++) {
+        satCurve[i] = Math.max(-0.98, Math.min(0.98, satCurve[i] * satCompensation));
+      }
+
+      saturationNode.curve = satCurve;
+      saturationNode.oversample = (satMode === 'soft' || satMix >= 100 ? '4x' : 'none');
 
       const saturationDryGain = offlineContext.createGain();
       const saturationWetGain = offlineContext.createGain();
-      saturationDryGain.gain.value = 1 - (settings.saturation.mix / 100);
-      saturationWetGain.gain.value = settings.saturation.mix / 100;
+      // Offline path: gunakan hanya jalur wet, karena mix sudah di-handle di kurva
+      saturationDryGain.gain.value = 0;
+      saturationWetGain.gain.value = 1;
 
       const saturationMix = offlineContext.createGain();
       const saturationBypass = offlineContext.createGain();
@@ -2431,4 +2542,3 @@ export class AudioEngine {
     }
   }
 }
-
