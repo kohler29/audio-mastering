@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { seoConfig } from "@/lib/seo";
@@ -42,18 +42,30 @@ export const metadata: Metadata = {
     title: seoConfig.defaultTitle,
     description: seoConfig.defaultDescription,
     siteName: seoConfig.siteName,
+    images: [
+      {
+        url: seoConfig.ogImageUrl,
+        width: 1200,
+        height: 630,
+        alt: seoConfig.siteName,
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     site: seoConfig.twitterHandle,
     title: seoConfig.defaultTitle,
     description: seoConfig.defaultDescription,
+    images: [seoConfig.ogImageUrl],
   },
   robots: {
     index: true,
     follow: true,
   },
-  themeColor: "#0f172a",
+};
+
+export const viewport: Viewport = {
+  themeColor: seoConfig.themeColor,
 };
 
 export default function RootLayout({

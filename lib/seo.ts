@@ -6,6 +6,8 @@ export interface SEOConfig {
   twitterHandle: string;
   stage: string;
   bannerText: string;
+  ogImageUrl: string;
+  themeColor: string;
 }
 
 export const seoConfig: SEOConfig = {
@@ -18,4 +20,8 @@ export const seoConfig: SEOConfig = {
   twitterHandle: process.env.NEXT_PUBLIC_TWITTER_HANDLE || "@masterpro",
   stage: process.env.NEXT_PUBLIC_APP_STAGE || "beta",
   bannerText: process.env.NEXT_PUBLIC_APP_BANNER || "Beta",
+  ogImageUrl:
+    process.env.NEXT_PUBLIC_OG_IMAGE_URL ||
+    `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/og-image.png`,
+  themeColor: process.env.NEXT_PUBLIC_THEME_COLOR || "#0f172a",
 };
