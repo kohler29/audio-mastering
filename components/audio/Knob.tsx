@@ -111,11 +111,10 @@ export function Knob({ value, onChange, min, max, label, unit = '', size = 'medi
       {/* Value display */}
       <div className="text-center">
         <div className={`text-cyan-400 ${sizeClasses[size].value}`}>
-          {value}{unit}
+          {Number(value).toFixed(1)}{unit ? ` ${unit}` : ''}
         </div>
         <div className="text-zinc-500 text-xs mt-0.5">{label}</div>
       </div>
     </div>
   );
 }
-

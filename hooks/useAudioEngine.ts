@@ -24,6 +24,7 @@ export interface UseAudioEngineReturn {
   resumeContext: () => Promise<void>;
   getWaveformData: (width?: number) => Float32Array | null;
   getStereoWaveformData: (width?: number) => { left: Float32Array; right: Float32Array } | null;
+  measureOfflineLoudness: (settings: AudioEngineSettings) => Promise<{ integrated: number; truePeak: number }>;
 }
 
 export function useAudioEngine(): UseAudioEngineReturn {
@@ -246,6 +247,19 @@ export function useAudioEngine(): UseAudioEngineReturn {
     return engine.getStereoWaveformData(width);
   }, [engine]);
 
+  const measureOfflineLoudness = useCallback(async (settings: AudioEngineSettings): Promise<{ integrated: number; truePeak: number }> => {
+    if (!engine) {
+      throw new Error('Audio engine not initialized');
+    }
+    try {
+      return await engine.measureOfflineLoudness(settings);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to measure loudness';
+      setError(errorMessage);
+      throw err;
+    }
+  }, [engine]);
+
   return {
     engine,
     isInitialized,
@@ -267,5 +281,6 @@ export function useAudioEngine(): UseAudioEngineReturn {
     resumeContext,
     getWaveformData,
     getStereoWaveformData,
+    measureOfflineLoudness,
   };
 }

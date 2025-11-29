@@ -2720,6 +2720,327 @@ export class AudioEngine {
     }
   }
 
+  async measureOfflineLoudness(settings: AudioEngineSettings): Promise<{ integrated: number; truePeak: number }> {
+    if (!this.audioBuffer) {
+      throw new Error('No audio loaded');
+    }
+
+    const sampleRate = this.audioBuffer.sampleRate;
+    const length = this.audioBuffer.length;
+    const numberOfChannels = this.audioBuffer.numberOfChannels;
+
+    const offlineContext = new OfflineAudioContext(numberOfChannels, length, sampleRate);
+
+    const source = offlineContext.createBufferSource();
+    source.buffer = this.audioBuffer;
+
+    const inputGain = offlineContext.createGain();
+    inputGain.gain.value = this.dbToGain(settings.inputGain);
+
+    let chainInput: GainNode = inputGain;
+
+    let multibandOutput: GainNode | null = null;
+    let multibandBypass: GainNode | null = null;
+    if (settings.multibandCompressor.enabled && settings.multibandCompressor.bands.length > 0) {
+      multibandBypass = offlineContext.createGain();
+      multibandBypass.gain.value = 0;
+      multibandOutput = offlineContext.createGain();
+      multibandOutput.gain.value = 1;
+
+      settings.multibandCompressor.bands.forEach((band) => {
+        if (!band.active) return;
+        const highpass = offlineContext.createBiquadFilter();
+        highpass.type = 'highpass';
+        highpass.frequency.value = band.lowFreq;
+        highpass.Q.value = 0.7;
+
+        const lowpass = offlineContext.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = band.highFreq;
+        lowpass.Q.value = 0.7;
+
+        const bandCompressor = offlineContext.createDynamicsCompressor();
+        bandCompressor.threshold.value = band.threshold;
+        bandCompressor.ratio.value = band.ratio;
+        bandCompressor.attack.value = 0.003;
+        bandCompressor.release.value = 0.1;
+        bandCompressor.knee.value = 30;
+
+        const bandGain = offlineContext.createGain();
+        bandGain.gain.value = this.dbToGain(band.gain);
+
+        inputGain.connect(highpass);
+        highpass.connect(lowpass);
+        lowpass.connect(bandCompressor);
+        bandCompressor.connect(bandGain);
+        bandGain.connect(multibandOutput!);
+      });
+
+      inputGain.connect(multibandBypass);
+      const multibandMix = offlineContext.createGain();
+      multibandOutput!.connect(multibandMix);
+      multibandBypass.connect(multibandMix);
+      chainInput = multibandMix;
+    }
+
+    const compressor = offlineContext.createDynamicsCompressor();
+    compressor.threshold.value = settings.compressor.threshold;
+    compressor.ratio.value = settings.compressor.ratio;
+    compressor.attack.value = settings.compressor.attack / 1000;
+    compressor.release.value = settings.compressor.release / 1000;
+    compressor.knee.value = 30;
+
+    const compressorGain = offlineContext.createGain();
+    compressorGain.gain.value = this.dbToGain(settings.compressor.gain);
+
+    const compressorMix = offlineContext.createGain();
+    const compressorBypass = offlineContext.createGain();
+    compressorMix.gain.value = settings.compressor.enabled ? 1 : 0;
+    compressorBypass.gain.value = settings.compressor.enabled ? 0 : 1;
+    const compressorOutput = offlineContext.createGain();
+
+    const saturationNode = offlineContext.createWaveShaper();
+    const satDrive = settings.saturation.drive;
+    const satBias = settings.saturation.bias;
+    const satMode = settings.saturation.mode || 'soft';
+    const satMix = settings.saturation.mix;
+    const satCurve = new Float32Array(65536);
+    const satHardLimit = satMode === 'soft' ? 0.9 : 0.98;
+    let satSumInSq = 0;
+    let satSumOutSq = 0;
+    for (let i = 0; i < 65536; i++) {
+      const x = (i - 32768) / 32768;
+      let saturated: number;
+      switch (satMode) {
+        case 'tube': {
+          const drive = satDrive / 100;
+          const bias = satBias / 100;
+          const tubeGain = 1 + drive * 4.0;
+          const tubeInput = x * tubeGain;
+          saturated = tubeInput >= 0 ? Math.tanh(tubeInput * 0.9) * 1.05 : Math.tanh(tubeInput * 1.1) * 0.95;
+          saturated += Math.sin(tubeInput * Math.PI * 0.5) * 0.05 * drive;
+          saturated += bias * 0.12;
+          break;
+        }
+        case 'tape': {
+          const drive = satDrive / 100;
+          const bias = satBias / 100;
+          const tapeGain = 1 + drive * 3.5;
+          const tapeInput = x * tapeGain;
+          const tapeBase = (2 / Math.PI) * Math.atan(tapeInput * Math.PI / 2);
+          const tapeCompression = tapeInput / (1 + Math.abs(tapeInput) * 0.5);
+          saturated = tapeBase * 0.7 + tapeCompression * 0.3;
+          saturated += Math.sin(tapeInput * Math.PI) * 0.03 * drive;
+          saturated += bias * 0.1;
+          break;
+        }
+        default: {
+          const drive = satDrive / 100;
+          const bias = satBias / 100;
+          const softGain = 1 + drive * 2.0;
+          const biased = x + bias * 0.15;
+          const input = biased * softGain;
+          saturated = Math.tanh(input);
+          break;
+        }
+      }
+      const mixValue = satMix / 100;
+      const blended = x + mixValue * (saturated - x);
+      const y = Math.max(-satHardLimit, Math.min(satHardLimit, blended));
+      satCurve[i] = y;
+      satSumInSq += x * x;
+      satSumOutSq += y * y;
+    }
+    let satCompensation = satSumOutSq > 0 ? Math.sqrt(satSumInSq / satCurve.length) / Math.sqrt(satSumOutSq / satCurve.length) : 1;
+    satCompensation = Math.min(1.2, Math.max(0.5, satCompensation));
+    if (satMode === 'soft') {
+      satCompensation = Math.min(satCompensation, 0.9);
+    }
+    for (let i = 0; i < satCurve.length; i++) {
+      satCurve[i] = Math.max(-0.98, Math.min(0.98, satCurve[i] * satCompensation));
+    }
+    saturationNode.curve = satCurve;
+    saturationNode.oversample = (satMode === 'soft' || satMix >= 100 ? '4x' : 'none');
+
+    const saturationDryGain = offlineContext.createGain();
+    const saturationWetGain = offlineContext.createGain();
+    saturationDryGain.gain.value = 0;
+    saturationWetGain.gain.value = 1;
+
+    const saturationMix = offlineContext.createGain();
+    const saturationBypass = offlineContext.createGain();
+    saturationMix.gain.value = settings.saturation.enabled ? 1 : 0;
+    saturationBypass.gain.value = settings.saturation.enabled ? 0 : 1;
+    const saturationOutput = offlineContext.createGain();
+
+    let reverbOutput: GainNode | null = null;
+    if (settings.reverb.enabled) {
+      const maxDelayTime = 0.1;
+      const reverbDelay = offlineContext.createDelay(maxDelayTime);
+      const delayTime = settings.reverb.size / 100 * 0.1;
+      reverbDelay.delayTime.value = delayTime;
+      const reverbFeedback = offlineContext.createGain();
+      const feedbackValue = Math.min(0.95, settings.reverb.decay / 10 * 0.3);
+      reverbFeedback.gain.value = feedbackValue;
+      const reverbDamping = offlineContext.createBiquadFilter();
+      reverbDamping.type = 'lowpass';
+      reverbDamping.frequency.value = 20000 - (settings.reverb.damping / 100 * 15000);
+      reverbDelay.connect(reverbDamping);
+      reverbDamping.connect(reverbFeedback);
+      reverbFeedback.connect(reverbDelay);
+      const reverbWetGain = offlineContext.createGain();
+      const reverbDryGain = offlineContext.createGain();
+      reverbWetGain.gain.value = settings.reverb.mix / 100;
+      reverbDryGain.gain.value = 1 - (settings.reverb.mix / 100);
+      compressorOutput.connect(reverbDryGain);
+      compressorOutput.connect(reverbDelay);
+      reverbDelay.connect(reverbWetGain);
+      reverbOutput = offlineContext.createGain();
+      reverbDryGain.connect(reverbOutput);
+      reverbWetGain.connect(reverbOutput);
+    }
+
+    chainInput.connect(compressor);
+    chainInput.connect(compressorBypass);
+    compressor.connect(compressorGain);
+    compressorGain.connect(compressorMix);
+    compressorMix.connect(compressorOutput);
+    compressorBypass.connect(compressorOutput);
+
+    const saturationInput = reverbOutput || compressorOutput;
+    saturationInput.connect(saturationNode);
+    saturationInput.connect(saturationDryGain);
+    saturationNode.connect(saturationWetGain);
+    const saturationMixNode = offlineContext.createGain();
+    saturationWetGain.connect(saturationMixNode);
+    saturationDryGain.connect(saturationMixNode);
+    saturationMixNode.connect(saturationMix);
+    saturationInput.connect(saturationBypass);
+    saturationMix.connect(saturationOutput);
+    saturationBypass.connect(saturationOutput);
+
+    let stereoOutput: GainNode = saturationOutput;
+    if (settings.stereoWidth.enabled && numberOfChannels >= 2) {
+      const splitter = offlineContext.createChannelSplitter(2);
+      const merger = offlineContext.createChannelMerger(2);
+      const width = settings.stereoWidth.width / 100;
+      const leftDirect = offlineContext.createGain();
+      const rightDirect = offlineContext.createGain();
+      const leftCrossfeed = offlineContext.createGain();
+      const rightCrossfeed = offlineContext.createGain();
+      leftDirect.gain.value = (1 + width) / 2;
+      rightDirect.gain.value = (1 + width) / 2;
+      leftCrossfeed.gain.value = (1 - width) / 2;
+      rightCrossfeed.gain.value = (1 - width) / 2;
+      saturationOutput.connect(splitter);
+      splitter.connect(leftDirect, 0);
+      splitter.connect(rightDirect, 1);
+      splitter.connect(leftCrossfeed, 1);
+      splitter.connect(rightCrossfeed, 0);
+      const leftSum = offlineContext.createGain();
+      const rightSum = offlineContext.createGain();
+      leftDirect.connect(leftSum);
+      leftCrossfeed.connect(leftSum);
+      rightDirect.connect(rightSum);
+      rightCrossfeed.connect(rightSum);
+      leftSum.connect(merger, 0, 0);
+      rightSum.connect(merger, 0, 1);
+      stereoOutput = offlineContext.createGain();
+      merger.connect(stereoOutput);
+    }
+
+    const limiter = offlineContext.createDynamicsCompressor();
+    limiter.threshold.value = settings.limiter.threshold;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.05;
+    limiter.knee.value = 0;
+    const limiterMix = offlineContext.createGain();
+    const limiterBypass = offlineContext.createGain();
+    limiterMix.gain.value = settings.limiter.enabled ? 1 : 0;
+    limiterBypass.gain.value = settings.limiter.enabled ? 0 : 1;
+    const limiterOutput = offlineContext.createGain();
+
+    const outputGain = offlineContext.createGain();
+    outputGain.gain.value = this.dbToGain(settings.outputGain);
+
+    source.connect(inputGain);
+    stereoOutput.connect(limiter);
+    stereoOutput.connect(limiterBypass);
+    limiter.connect(limiterMix);
+    limiterMix.connect(limiterOutput);
+    limiterBypass.connect(limiterOutput);
+    limiterOutput.connect(outputGain);
+    outputGain.connect(offlineContext.destination);
+
+    source.start(0);
+    const renderedBuffer = await offlineContext.startRendering();
+
+    if (!renderedBuffer) {
+      throw new Error('Failed to render audio buffer');
+    }
+
+    const renderedLength = renderedBuffer.length;
+    const renderedRate = renderedBuffer.sampleRate;
+    const ch = Array.from({ length: renderedBuffer.numberOfChannels }, (_, idx) => renderedBuffer.getChannelData(idx));
+    const mono = new Float32Array(renderedLength);
+    for (let i = 0; i < renderedLength; i++) {
+      let sum = 0;
+      for (let c = 0; c < ch.length; c++) {
+        sum += ch[c][i];
+      }
+      mono[i] = sum / ch.length;
+    }
+
+    let truePeak = -Infinity;
+    for (let i = 0; i < mono.length; i++) {
+      const nextIdx = Math.min(i + 1, mono.length - 1);
+      for (let os = 0; os < 4; os++) {
+        const interpolated = mono[i] + (mono[nextIdx] - mono[i]) * (os / 4);
+        const peak = Math.abs(interpolated);
+        if (peak > truePeak) truePeak = peak;
+      }
+    }
+    const truePeakDb = 20 * Math.log10(Math.max(0.0001, truePeak));
+
+    const frameSize = 2048;
+    const lufsFrames: number[] = [];
+    const totalFrames = Math.ceil(mono.length / frameSize);
+    for (let f = 0; f < totalFrames; f++) {
+      const start = f * frameSize;
+      const end = Math.min(start + frameSize, mono.length);
+      let sumSquares = 0;
+      let count = 0;
+      for (let i = start; i < end; i++) {
+        const sample = mono[i];
+        const freq = (i * renderedRate) / (mono.length * 2);
+        let weighted = sample;
+        if (freq > 1500) {
+          const boost = 1 + (freq - 1500) / 10000;
+          weighted = sample * Math.min(boost, 1.58);
+        }
+        sumSquares += weighted * weighted;
+        count++;
+      }
+      const rms = Math.sqrt(sumSquares / Math.max(1, count));
+      const power = rms * rms;
+      const lufs = -0.691 + 10 * Math.log10(Math.max(0.0000001, power));
+      if (lufs > -70) {
+        lufsFrames.push(lufs);
+      }
+    }
+
+    let integrated = -23;
+    if (lufsFrames.length > 0) {
+      const ungatedAvg = lufsFrames.reduce((a, b) => a + b, 0) / lufsFrames.length;
+      const gateThreshold = ungatedAvg - 10;
+      const gated = lufsFrames.filter(v => v >= gateThreshold);
+      integrated = (gated.length > 0 ? gated.reduce((a, b) => a + b, 0) / gated.length : ungatedAvg);
+    }
+
+    return { integrated: Math.max(-70, Math.min(0, integrated)), truePeak: Math.max(-60, Math.min(10, truePeakDb)) };
+  }
+
   destroy(): void {
     this.stop();
     this.cleanup();

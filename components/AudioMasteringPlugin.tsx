@@ -40,6 +40,7 @@ export function AudioMasteringPlugin() {
     exportAudio,
     resumeContext,
     getStereoWaveformData,
+    measureOfflineLoudness,
   } = useAudioEngine();
 
   const { savePreset, presets: dbPresets, isLoading: presetsLoading, loadPreset } = usePresets();
@@ -59,6 +60,7 @@ export function AudioMasteringPlugin() {
   // Control states
   const [inputGain, setInputGain] = useState(0);
   const [outputGain, setOutputGain] = useState(0);
+  const [targetLUFS, setTargetLUFS] = useState(-14);
   
   // Multiband Compressor states
   const [multibandEnabled, setMultibandEnabled] = useState(true);
@@ -297,6 +299,23 @@ export function AudioMasteringPlugin() {
 
   const handleSeek = (time: number) => {
     seek(time);
+  };
+
+  const handleNormalizeLoudness = async () => {
+    if (!audioFile) {
+      showToast('Please load an audio file first.', 'error');
+      return;
+    }
+    try {
+      const settings = getCurrentSettings();
+      const { integrated } = await measureOfflineLoudness(settings);
+      const delta = targetLUFS - integrated;
+      setOutputGain((prev) => prev + delta);
+      showToast(`Normalized to ${targetLUFS} LUFS (measured ${integrated.toFixed(1)} LUFS)`, 'success');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to normalize loudness';
+      showToast(errorMessage, 'error');
+    }
   };
 
   const handlePresetChange = async (value: string) => {
@@ -626,6 +645,27 @@ export function AudioMasteringPlugin() {
               label="GAIN"
               unit="dB"
             />
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-zinc-400 text-xs block mb-1">Target LUFS</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={targetLUFS}
+                  onChange={(e) => setTargetLUFS(Number(e.target.value))}
+                  className="w-full bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={handleNormalizeLoudness}
+                  disabled={!audioFile || isLoading}
+                  className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded border border-cyan-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                >
+                  Normalize
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
