@@ -224,12 +224,21 @@ export class AudioEngine {
     return this.audioContext?.state || null;
   }
 
+  /**
+   * setupAnalyser
+   * Mengonfigurasi AnalyserNode dengan ukuran FFT dinamis berdasarkan viewport
+   * untuk keseimbangan akurasi dan performa pada mobile/desktop.
+   */
   private setupAnalyser(): void {
     if (!this.audioContext) return;
 
     this.analyserNode = this.audioContext.createAnalyser();
-    this.analyserNode.fftSize = 2048;
-    this.analyserNode.smoothingTimeConstant = 0.8;
+    const w = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    const isMobile = w <= 640;
+    const isTablet = w > 640 && w <= 1024;
+
+    this.analyserNode.fftSize = isMobile ? 1024 : isTablet ? 2048 : 2048;
+    this.analyserNode.smoothingTimeConstant = isMobile ? 0.7 : isTablet ? 0.8 : 0.8;
   }
 
   async loadAudioFile(file: File): Promise<void> {

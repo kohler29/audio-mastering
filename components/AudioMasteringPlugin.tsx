@@ -502,9 +502,9 @@ export function AudioMasteringPlugin() {
             <p className="text-yellow-400 text-xs mt-1">Loading audio...</p>
           )}
         </div>
-        <div className="flex items-center gap-2 md:gap-4 flex-wrap md:flex-nowrap order-2 md:order-0 w-full md:w-auto">
+        <div className="flex items-center gap-2 md:gap-4 flex-wrap md:flex-nowrap order-2 md:order-0 w-full md:w-auto overflow-x-auto whitespace-nowrap">
           {/* Upload Button */}
-          <label className={`bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 transition-colors flex items-center gap-2 ${
+          <label aria-label="Upload audio file" className={`bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 transition-colors flex items-center gap-2 ${
             !isInitialized || isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
           }`}>
             <Upload className="w-4 h-4" />
@@ -515,6 +515,7 @@ export function AudioMasteringPlugin() {
               onChange={handleFileUpload}
               className="hidden"
               disabled={!isInitialized || isLoading}
+              aria-label="Choose audio file"
             />
           </label>
 
@@ -522,6 +523,7 @@ export function AudioMasteringPlugin() {
           <button 
             onClick={() => setShowExportModal(true)}
             disabled={!audioFile || isLoading}
+            aria-label="Export mastered audio"
             className="bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg border border-emerald-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
@@ -560,12 +562,13 @@ export function AudioMasteringPlugin() {
           </select>
           <button 
             onClick={() => setShowSavePresetModal(true)}
+            aria-label="Save preset"
             className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-2 rounded-lg border border-zinc-600 transition-colors"
             title="Save Preset"
           >
             <Save className="w-4 h-4" />
           </button>
-          <button className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-2 rounded-lg border border-zinc-600 transition-colors">
+          <button aria-label="Settings" className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-2 rounded-lg border border-zinc-600 transition-colors">
             <Settings className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 rounded-lg border border-zinc-700 max-w-full">
@@ -573,6 +576,7 @@ export function AudioMasteringPlugin() {
           </div>
           <button 
             onClick={logout}
+            aria-label="Logout"
             className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg border border-red-600 transition-colors flex items-center gap-2"
             title="Logout"
           >
@@ -632,27 +636,30 @@ export function AudioMasteringPlugin() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-zinc-400 text-xs tracking-wider">WAVEFORM</h3>
               <div className="flex gap-2">
-                <button 
-                  onClick={() => handleSeek(0)}
-                  className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={!audioFile || isLoading}
-                >
-                  <SkipBack className="w-3 h-3" />
-                </button>
-                <button 
-                  onClick={handlePlayPause}
-                  className="bg-cyan-600 hover:bg-cyan-500 text-white p-1.5 rounded transition-colors disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed"
-                  disabled={!audioFile || isLoading}
-                >
-                  {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-                </button>
-                <button 
-                  onClick={handleStop}
-                  className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={!audioFile || isLoading}
-                >
-                  <SkipForward className="w-3 h-3" />
-                </button>
+              <button 
+                onClick={() => handleSeek(0)}
+                aria-label="Seek to start"
+                className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!audioFile || isLoading}
+              >
+                <SkipBack className="w-3 h-3" />
+              </button>
+              <button 
+                onClick={handlePlayPause}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+                className="bg-cyan-600 hover:bg-cyan-500 text-white p-1.5 rounded transition-colors disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed"
+                disabled={!audioFile || isLoading}
+              >
+                {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+              </button>
+              <button 
+                onClick={handleStop}
+                aria-label="Stop"
+                className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!audioFile || isLoading}
+              >
+                <SkipForward className="w-3 h-3" />
+              </button>
               </div>
             </div>
             <Waveform 
@@ -663,6 +670,15 @@ export function AudioMasteringPlugin() {
               duration={duration}
               onSeek={seek}
             />
+            {isLoading && (
+              <div className="absolute inset-0 m-4 rounded-xl bg-zinc-900/60 flex items-center justify-center">
+                <div className="w-3/4 h-24 md:h-28 grid grid-cols-8 gap-2 animate-pulse">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="bg-zinc-700/60 rounded" />
+                  ))}
+                </div>
+              </div>
+            )}
             {!audioFile && (
               <div
                 onDragOver={handleDragOver}
@@ -682,7 +698,7 @@ export function AudioMasteringPlugin() {
           {/* Spectrum Analyzer */}
           <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
             <h3 className="text-zinc-400 text-xs tracking-wider mb-3">SPECTRUM ANALYZER</h3>
-            <SpectrumAnalyzer isPlaying={isPlaying} analysisData={analysisData} />
+            <SpectrumAnalyzer isPlaying={isPlaying} analysisData={analysisData} loading={isLoading} />
           </div>
 
           {/* Loudness Meter */}

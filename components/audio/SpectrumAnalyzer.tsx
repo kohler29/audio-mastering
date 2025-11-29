@@ -6,9 +6,14 @@ import { AudioAnalysisData } from '@/lib/audio/audioEngine';
 interface SpectrumAnalyzerProps {
   isPlaying?: boolean;
   analysisData: AudioAnalysisData | null;
+  loading?: boolean;
 }
 
-export function SpectrumAnalyzer({ isPlaying = false, analysisData }: SpectrumAnalyzerProps) {
+/**
+ * SpectrumAnalyzer
+ * Menganalisa spektrum dengan log-binning dan normalisasi dB.
+ */
+export function SpectrumAnalyzer({ isPlaying = false, analysisData, loading = false }: SpectrumAnalyzerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
   const barsRef = useRef<number[]>(Array(64).fill(0));
@@ -174,10 +179,21 @@ export function SpectrumAnalyzer({ isPlaying = false, analysisData }: SpectrumAn
   }, []);
 
   return (
-    <canvas 
-      ref={canvasRef}
-      className="w-full h-32 rounded-lg"
-      style={{ width: '100%', height: '128px' }}
-    />
+    <div className="relative">
+      <canvas 
+        ref={canvasRef}
+        className="w-full h-24 sm:h-28 md:h-32 rounded-lg"
+        style={{ width: '100%' }}
+      />
+      {loading && (
+        <div className="absolute inset-0 rounded-lg bg-zinc-900/60 flex items-center justify-center">
+          <div className="w-3/4 h-16 grid grid-cols-10 gap-2 animate-pulse">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="bg-zinc-700/60 rounded" />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
