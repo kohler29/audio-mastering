@@ -20,17 +20,42 @@ import { AudioEngineSettings } from '@/lib/audio/audioEngine';
 import { effectPresets } from '@/lib/audio/audioEffects';
 import { ToastContainer, type Toast } from '@/components/ui/Toast';
 
-interface DisclaimerProps {
+
+interface DisclaimerModalProps {
+  title: string;
   text: string;
+  acceptLabel: string;
+  closeLabel: string;
+  isOpen: boolean;
+  onAccept: () => void;
+  onClose: () => void;
 }
 
 /**
- * Menampilkan disclaimer singkat di halaman utama.
+ * Popup disclaimer yang muncul saat user masuk dashboard.
  */
-function Disclaimer({ text }: DisclaimerProps) {
+function DisclaimerModal({ title, text, acceptLabel, closeLabel, isOpen, onAccept, onClose }: DisclaimerModalProps) {
+  if (!isOpen) return null;
   return (
-    <div className="mb-4 p-3 bg-zinc-800/40 border border-zinc-700 rounded-lg">
-      <p className="text-zinc-400 text-xs">{text}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="bg-zinc-800 rounded-xl p-6 w-full max-w-md border border-zinc-700 shadow-xl">
+        <h2 className="text-zinc-100 mb-2">{title}</h2>
+        <p className="text-zinc-300 text-sm mb-4">{text}</p>
+        <div className="flex gap-2">
+          <button
+            onClick={onAccept}
+            className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            {acceptLabel}
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors"
+          >
+            {closeLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -40,6 +65,11 @@ export function AudioMasteringPlugin() {
   const FEATURE_REVERB = process.env.NEXT_PUBLIC_FEATURE_REVERB === 'true';
   const FEATURE_HARMONIZER = process.env.NEXT_PUBLIC_FEATURE_HARMONIZER === 'true';
   const DISCLAIMER_TEXT = process.env.NEXT_PUBLIC_DISCLAIMER_NO_STORAGE_TEXT || 'Kami tidak menyimpan data audio apapun di website ini.';
+  const DISCLAIMER_STORAGE_KEY = process.env.NEXT_PUBLIC_DISCLAIMER_STORAGE_KEY || 'DISCLAIMER_ACK';
+  const DISCLAIMER_TITLE = process.env.NEXT_PUBLIC_DISCLAIMER_TITLE || 'Pernyataan Privasi & Keamanan Data';
+  const DISCLAIMER_ACCEPT_LABEL = process.env.NEXT_PUBLIC_DISCLAIMER_ACCEPT_LABEL || 'Saya Mengerti';
+  const DISCLAIMER_CLOSE_LABEL = process.env.NEXT_PUBLIC_DISCLAIMER_CLOSE_LABEL || 'Tutup';
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
   const {
     isInitialized,
     isLoading,
@@ -511,6 +541,19 @@ export function AudioMasteringPlugin() {
     }
   };
 
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const acknowledged = window.localStorage.getItem(DISCLAIMER_STORAGE_KEY);
+        if (!acknowledged) {
+          setShowDisclaimer(true);
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [DISCLAIMER_STORAGE_KEY]);
+
   return (
     <div className="min-h-screen w-full bg-linear-to-br from-zinc-800 via-zinc-900 to-zinc-950 border border-zinc-700/60 shadow-2xl px-4 py-6 md:p-8">
       {/* Error Display */}
@@ -636,7 +679,7 @@ export function AudioMasteringPlugin() {
         </div>
       </div>
 
-      <Disclaimer text={DISCLAIMER_TEXT} />
+      {/* Disclaimer Popup */}
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -1066,6 +1109,26 @@ export function AudioMasteringPlugin() {
           </div>
         </div>
       )}
+
+      {/* Disclaimer Modal */}
+      <DisclaimerModal
+        title={DISCLAIMER_TITLE}
+        text={DISCLAIMER_TEXT}
+        acceptLabel={DISCLAIMER_ACCEPT_LABEL}
+        closeLabel={DISCLAIMER_CLOSE_LABEL}
+        isOpen={showDisclaimer}
+        onAccept={() => {
+          try {
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem(DISCLAIMER_STORAGE_KEY, '1');
+            }
+          } catch {
+            // Ignore storage errors
+          }
+          setShowDisclaimer(false);
+        }}
+        onClose={() => setShowDisclaimer(false)}
+      />
 
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onClose={removeToast} />
