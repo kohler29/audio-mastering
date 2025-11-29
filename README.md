@@ -1,36 +1,294 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎵 Master Pro - Professional Audio Mastering Plugin
 
-## Getting Started
+Aplikasi web profesional untuk audio mastering dengan kontrol advanced dan visualisasi real-time. Dibangun dengan Next.js 16, React 19, dan Prisma.
 
-First, run the development server:
+![Next.js](https://img.shields.io/badge/Next.js-16.0.4-black?style=flat-square&logo=next.js)
+![React](https://img.shields.io/badge/React-19.2.0-blue?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript)
+![Prisma](https://img.shields.io/badge/Prisma-7.0.1-2D3748?style=flat-square&logo=prisma)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4-38B2AC?style=flat-square&logo=tailwind-css)
+
+---
+
+## ✨ Fitur Utama
+
+- 🎚️ **Audio Processing**: EQ, Compressor, Limiter dengan DSP berkualitas tinggi
+- 📊 **Real-time Visualization**: Waveform, spectrum analyzer, dan metering
+- 💾 **Preset Management**: Simpan dan load preset mastering favorit Anda
+- 🔐 **User Authentication**: Login/Register dengan JWT + Google OAuth
+- 🎨 **Modern UI**: Interface premium dengan dark mode dan animasi smooth
+- 📱 **Responsive Design**: Optimal di desktop, tablet, dan mobile
+- ⚡ **Performance**: Dioptimasi dengan React 19 dan Next.js 16 Turbopack
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Node.js** 18+ atau **Bun** 1.0+
+- **PostgreSQL** database (lokal atau cloud)
+
+### Installation
+
+1. **Clone repository**
+   ```bash
+   git clone <repository-url>
+   cd master
+   ```
+
+2. **Install dependencies**
+   ```bash
+   bun install
+   # atau
+   npm install
+   ```
+
+3. **Setup environment variables**
+   
+   Buat file `.env` di root directory:
+   ```env
+   # Database
+   DATABASE_URL="postgresql://user:password@localhost:5432/master_db?schema=public"
+   
+   # JWT Authentication
+   JWT_SECRET="your-super-secret-jwt-key-min-32-chars"
+   JWT_EXPIRES_IN="7d"
+   
+   # Google OAuth (Optional)
+   GOOGLE_CLIENT_ID="your-google-client-id"
+   GOOGLE_CLIENT_SECRET="your-google-client-secret"
+   GOOGLE_REDIRECT_URI="http://localhost:3000/api/auth/google/callback"
+   ```
+
+4. **Setup database**
+   ```bash
+   # Generate Prisma Client
+   bun run db:generate
+   
+   # Run migrations
+   bun run db:migrate
+   ```
+
+5. **Run development server**
+   ```bash
+   bun dev
+   ```
+
+6. **Open browser**
+   
+   Buka [http://localhost:3000](http://localhost:3000)
+
+---
+
+## 📦 Tech Stack
+
+### Frontend
+- **Next.js 16** - React framework dengan App Router
+- **React 19** - UI library dengan React Compiler
+- **TypeScript 5** - Type safety
+- **TailwindCSS 4** - Utility-first CSS
+- **Framer Motion** - Animasi smooth
+- **Lucide React** - Icon library
+- **SWR** - Data fetching & caching
+
+### Backend
+- **Next.js API Routes** - Serverless API
+- **Prisma 7** - ORM untuk database
+- **PostgreSQL** - Relational database
+- **JWT** - Authentication
+- **bcryptjs** - Password hashing
+
+### Audio Processing
+- **Web Audio API** - Real-time audio processing
+- **AudioBuffer** - Audio manipulation
+- **Custom DSP** - EQ, Compressor, Limiter algorithms
+
+---
+
+## 🛠️ Available Scripts
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Development
+bun dev              # Start dev server
+bun build            # Build for production
+bun start            # Start production server
+bun lint             # Run ESLint
+
+# Database
+bun run db:generate  # Generate Prisma Client
+bun run db:migrate   # Run database migrations
+bun run db:studio    # Open Prisma Studio (database GUI)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📁 Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+master/
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes
+│   │   ├── auth/         # Authentication endpoints
+│   │   └── presets/      # Preset management
+│   ├── layout.tsx        # Root layout
+│   ├── page.tsx          # Home page
+│   └── globals.css       # Global styles
+├── components/            # React components
+│   ├── AudioProcessor/   # Audio processing components
+│   ├── Visualizer/       # Audio visualization
+│   └── UI/               # Reusable UI components
+├── hooks/                # Custom React hooks
+│   └── useAuth.ts        # Authentication hook
+├── lib/                  # Utility libraries
+│   ├── auth.ts           # JWT utilities
+│   └── prisma.ts         # Prisma client
+├── prisma/               # Database schema & migrations
+│   └── schema.prisma     # Database schema
+├── public/               # Static assets
+├── types/                # TypeScript type definitions
+├── .env                  # Environment variables (gitignored)
+├── vercel.json           # Vercel deployment config
+└── DEPLOYMENT.md         # Deployment guide
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🔐 Authentication
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Aplikasi ini mendukung 2 metode autentikasi:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Email/Password**: Register dan login dengan email
+2. **Google OAuth**: Login dengan akun Google (opsional)
 
-## Deploy on Vercel
+Semua password di-hash menggunakan bcrypt, dan session menggunakan JWT token yang disimpan di HTTP-only cookies.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 💾 Database Schema
+
+```prisma
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String   @unique
+  password  String?
+  presets   Preset[]
+  createdAt DateTime @default(now())
+}
+
+model Preset {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  settings    Json
+  userId      String
+  user        User     @relation(...)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+```
+
+---
+
+## 🌐 Deployment
+
+### Deploy ke Vercel (Recommended)
+
+Lihat panduan lengkap di **[DEPLOYMENT.md](./DEPLOYMENT.md)**
+
+**Quick Deploy:**
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/master)
+
+1. Push ke GitHub
+2. Import project di [vercel.com](https://vercel.com)
+3. Tambahkan environment variables
+4. Deploy!
+
+**Environment Variables yang Diperlukan:**
+- `DATABASE_URL` - PostgreSQL connection string
+- `JWT_SECRET` - JWT secret key (min 32 chars)
+- `JWT_EXPIRES_IN` - Token expiration (default: 7d)
+
+---
+
+## 🐛 Troubleshooting
+
+### Build Error: "Prisma Client not generated"
+```bash
+bunx prisma generate
+```
+
+### Database Connection Error
+Pastikan `DATABASE_URL` di `.env` sudah benar dan database sudah running.
+
+### Port 3000 sudah digunakan
+```bash
+# Gunakan port lain
+PORT=3001 bun dev
+```
+
+### TypeScript Errors
+```bash
+# Clear cache dan rebuild
+rm -rf .next
+bun run build
+```
+
+---
+
+## 📝 Development Notes
+
+### Audio Processing
+- Semua audio processing dilakukan di client-side menggunakan Web Audio API
+- DSP algorithms dioptimasi untuk real-time performance
+- Support untuk file audio: WAV, MP3, FLAC, OGG
+
+### Performance
+- Next.js 16 dengan Turbopack untuk build yang lebih cepat
+- React 19 dengan React Compiler untuk optimasi otomatis
+- SWR untuk data caching dan revalidation
+- Lazy loading untuk components besar
+
+### Browser Support
+- Chrome/Edge 90+
+- Firefox 88+
+- Safari 14+
+- Web Audio API required
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Silakan buat issue atau pull request.
+
+1. Fork repository
+2. Buat branch baru (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push ke branch (`git push origin feature/amazing-feature`)
+5. Buat Pull Request
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+---
+
+## 🙏 Acknowledgments
+
+- [Next.js](https://nextjs.org/) - React framework
+- [Prisma](https://www.prisma.io/) - Database ORM
+- [Vercel](https://vercel.com/) - Deployment platform
+- [TailwindCSS](https://tailwindcss.com/) - CSS framework
+- [Lucide](https://lucide.dev/) - Icon library
+
+---
+
+## 📧 Contact
+
+Untuk pertanyaan atau feedback, silakan buat issue di repository ini.
+
+**Built with ❤️ using Next.js & React**
