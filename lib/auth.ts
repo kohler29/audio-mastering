@@ -1,10 +1,16 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 
 // JWT Secret dari environment variable
 // Pastikan untuk set JWT_SECRET yang kuat di production!
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-const JWT_EXPIRES_IN: string | number = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_EXPIRES_IN: SignOptions['expiresIn'] = (() => {
+  const env = process.env.JWT_EXPIRES_IN;
+  if (!env) return '7d' as unknown as SignOptions['expiresIn'];
+  return /^\d+$/.test(env)
+    ? Number(env)
+    : (env as unknown as SignOptions['expiresIn']);
+})();
 
 export interface TokenPayload {
   userId: string;
@@ -35,8 +41,8 @@ export async function verifyPassword(
  * Generate JWT token untuk user
  */
 export function generateToken(payload: TokenPayload): string {
-  const options: jwt.SignOptions = {
-    expiresIn: JWT_EXPIRES_IN as any,
+  const options: SignOptions = {
+    expiresIn: JWT_EXPIRES_IN,
     issuer: 'master-pro',
     audience: 'master-pro-users',
   };
@@ -68,8 +74,7 @@ export function verifyToken(token: string): TokenPayload | null {
       email: decoded.email,
       username: decoded.username,
     };
-  } catch (error) {
-    // Token invalid, expired, atau tidak sesuai
+  } catch {
     return null;
   }
 }
@@ -84,4 +89,3 @@ export function decodeToken(token: string): TokenPayload | null {
     return null;
   }
 }
-

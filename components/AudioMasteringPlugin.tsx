@@ -39,7 +39,6 @@ export function AudioMasteringPlugin() {
     setupAudioChain,
     exportAudio,
     resumeContext,
-    getWaveformData,
     getStereoWaveformData,
   } = useAudioEngine();
 
@@ -55,6 +54,7 @@ export function AudioMasteringPlugin() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [leftWaveformData, setLeftWaveformData] = useState<Float32Array | null>(null);
   const [rightWaveformData, setRightWaveformData] = useState<Float32Array | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   
   // Control states
   const [inputGain, setInputGain] = useState(0);
@@ -213,15 +213,9 @@ export function AudioMasteringPlugin() {
     }
   }, [isInitialized, updateSettings, getCurrentSettings]);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Check if audio engine is initialized
+  const processAudioFile = async (file: File) => {
     if (!isInitialized) {
       showToast('Audio engine sedang diinisialisasi. Silakan tunggu sebentar...', 'error');
-      // Reset input
-      event.target.value = '';
       return;
     }
 
@@ -230,29 +224,15 @@ export function AudioMasteringPlugin() {
       setAudioFile(file);
       setAudioFileName(file.name);
       stop();
-      
-      // Generate stereo waveform data after a short delay to ensure audio buffer is ready
+
       setTimeout(() => {
-        // Use a reasonable width for waveform (will be scaled to canvas size)
         const stereoData = getStereoWaveformData(2000);
         if (stereoData) {
-          console.log('Waveform data generated:', {
-            hasLeft: !!stereoData.left,
-            hasRight: !!stereoData.right,
-            leftLength: stereoData.left?.length,
-            rightLength: stereoData.right?.length,
-            leftFirst: stereoData.left?.[0],
-            rightFirst: stereoData.right?.[0],
-            areSame: stereoData.left === stereoData.right
-          });
           setLeftWaveformData(stereoData.left);
           setRightWaveformData(stereoData.right);
-        } else {
-          console.warn('No stereo waveform data returned');
         }
       }, 100);
-      
-      // Reset semua effects ke OFF saat audio baru di-load
+
       setCompressorEnabled(false);
       setLimiterEnabled(false);
       setStereoEnabled(false);
@@ -268,9 +248,39 @@ export function AudioMasteringPlugin() {
       });
       const errorMessage = err instanceof Error ? err.message : 'Failed to load audio file';
       showToast(errorMessage, 'error');
-      // Reset input on error
-      event.target.value = '';
     }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await processAudioFile(file);
+    event.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('audio/')) {
+      showToast('File harus bertipe audio', 'error');
+      return;
+    }
+    await processAudioFile(file);
   };
 
   const handlePlayPause = () => {
@@ -317,7 +327,6 @@ export function AudioMasteringPlugin() {
       
       const preset = effectPresets[value.toLowerCase()];
       if (preset && preset.settings) {
-        // Convert EffectPreset settings to AudioEngineSettings format
         const convertedSettings: Partial<AudioEngineSettings> = {
           ...(preset.settings.compressor && {
             compressor: {
@@ -329,24 +338,6 @@ export function AudioMasteringPlugin() {
               gain: preset.settings.compressor.gain || 0,
             },
           }),
-          ...(preset.settings.reverb && {
-            reverb: {
-              enabled: true,
-              mix: preset.settings.reverb.mix,
-              size: preset.settings.reverb.size,
-              decay: preset.settings.reverb.decay,
-              damping: preset.settings.reverb.damping,
-            },
-          }),
-          ...(preset.settings.saturation && {
-            saturation: {
-              enabled: true,
-              drive: preset.settings.saturation.drive,
-              mix: preset.settings.saturation.mix,
-              bias: preset.settings.saturation.bias,
-              mode: 'soft' as const,
-            },
-          }),
         };
         applyPresetSettings(convertedSettings);
       }
@@ -354,13 +345,12 @@ export function AudioMasteringPlugin() {
   };
 
   const applyPresetSettings = (settings: Partial<AudioEngineSettings> | PresetSettings) => {
-    // Reset all enabled states to true for presets
     setCompressorEnabled(true);
     setLimiterEnabled(true);
     setStereoEnabled(true);
-    setHarmonizerEnabled(true);
-    setReverbEnabled(true);
-    setSaturationEnabled(true);
+    setHarmonizerEnabled(false);
+    setReverbEnabled(false);
+    setSaturationEnabled(false);
     
     if (settings.inputGain !== undefined) setInputGain(settings.inputGain);
     if (settings.outputGain !== undefined) setOutputGain(settings.outputGain);
@@ -381,31 +371,7 @@ export function AudioMasteringPlugin() {
       if (settings.stereoWidth.enabled !== undefined) setStereoEnabled(settings.stereoWidth.enabled);
       if (settings.stereoWidth.width !== undefined) setStereoWidth(settings.stereoWidth.width);
     }
-    if (settings.harmonizer) {
-      if (settings.harmonizer.enabled !== undefined) setHarmonizerEnabled(settings.harmonizer.enabled);
-      if (settings.harmonizer.mix !== undefined) setHarmonizerMix(settings.harmonizer.mix);
-      if (settings.harmonizer.depth !== undefined) setHarmonizerDepth(settings.harmonizer.depth);
-      if (settings.harmonizer.tone !== undefined) setHarmonizerTone(settings.harmonizer.tone);
-    }
-    if (settings.reverb) {
-      if (settings.reverb.enabled !== undefined) setReverbEnabled(settings.reverb.enabled);
-      if (settings.reverb.mix !== undefined) setReverbMix(settings.reverb.mix);
-      if (settings.reverb.size !== undefined) setReverbSize(settings.reverb.size);
-      if (settings.reverb.decay !== undefined) setReverbDecay(settings.reverb.decay);
-      if (settings.reverb.damping !== undefined) setReverbDamping(settings.reverb.damping);
-    }
-    if (settings.saturation) {
-      if (settings.saturation.enabled !== undefined) setSaturationEnabled(settings.saturation.enabled);
-      if (settings.saturation.drive !== undefined) setSaturationDrive(settings.saturation.drive);
-      if (settings.saturation.mix !== undefined) setSaturationMix(settings.saturation.mix);
-      if (settings.saturation.bias !== undefined) setSaturationBias(settings.saturation.bias);
-      if (settings.saturation.mode && 
-          (settings.saturation.mode === 'tube' || 
-           settings.saturation.mode === 'tape' || 
-           settings.saturation.mode === 'soft')) {
-        setSaturationMode(settings.saturation.mode);
-      }
-    }
+    // Harmonizer, reverb, dan saturation diabaikan untuk semua preset
     if (settings.multibandCompressor) {
       if (settings.multibandCompressor.enabled !== undefined) setMultibandEnabled(settings.multibandCompressor.enabled);
       if (settings.multibandCompressor.bands) {
@@ -698,10 +664,16 @@ export function AudioMasteringPlugin() {
               onSeek={seek}
             />
             {!audioFile && (
-              <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80 rounded-xl m-4">
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`absolute inset-0 flex items-center justify-center rounded-xl m-4 border-2 border-dashed transition-colors ${dragActive ? 'border-cyan-500 bg-cyan-900/20' : 'border-zinc-700 bg-zinc-900/80'}`}
+              >
                 <div className="text-center">
-                  <Upload className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+                  <Upload className={`w-8 h-8 mx-auto mb-2 ${dragActive ? 'text-cyan-400' : 'text-zinc-600'}`} />
                   <p className="text-zinc-500 text-sm">Upload an audio file to start mastering</p>
+                  <p className="text-zinc-600 text-xs mt-1">Drag & Drop file audio di sini</p>
                 </div>
               </div>
             )}

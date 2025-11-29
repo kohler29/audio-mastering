@@ -19,25 +19,11 @@ export function VUMeter({ label, value }: VUMeterProps) {
     // Update refs immediately for real-time response
     currentValueRef.current = value;
     
-    // Update peak value immediately if higher
-    if (value > peakValueRef.current) {
-      peakValueRef.current = value;
-      setPeakValue(value);
-      
-      // Reset peak after 1.5 seconds
-      if (peakTimeoutRef.current) {
-        clearTimeout(peakTimeoutRef.current);
-      }
-      
-      peakTimeoutRef.current = setTimeout(() => {
-        peakValueRef.current = value;
-        setPeakValue(value);
-      }, 1500);
-    }
+    // Jangan panggil setState langsung di effect; update peak di animasi
 
     // Use requestAnimationFrame for smooth, real-time updates
     const animate = () => {
-      // Smooth current value with fast attack, slow release (VU meter behavior)
+      // Smooth current value dengan fast attack, slow release (VU meter behavior)
       const targetValue = currentValueRef.current;
       const current = currentValueRef.current;
       
@@ -52,6 +38,20 @@ export function VUMeter({ label, value }: VUMeterProps) {
       
       currentValueRef.current = newValue;
       setCurrentValue(newValue);
+
+      // Peak update dilakukan di sini agar tidak setState di effect
+      if (newValue > peakValueRef.current) {
+        peakValueRef.current = newValue;
+        setPeakValue(newValue);
+
+        if (peakTimeoutRef.current) {
+          clearTimeout(peakTimeoutRef.current);
+        }
+        peakTimeoutRef.current = setTimeout(() => {
+          peakValueRef.current = currentValueRef.current;
+          setPeakValue(currentValueRef.current);
+        }, 1500);
+      }
       
       animationRef.current = requestAnimationFrame(animate);
     };

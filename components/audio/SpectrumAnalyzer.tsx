@@ -46,42 +46,61 @@ export function SpectrumAnalyzer({ isPlaying = false, analysisData }: SpectrumAn
         ctx.stroke();
       }
 
-      // Draw spectrum bars from real audio data
-      if (analysisData && analysisData.spectrum) {
-        const spectrum = analysisData.spectrum;
+      // Draw spectrum bars from real audio data (log-frequency binning, dB normalization)
+      if (analysisData && (analysisData.floatSpectrum || analysisData.spectrum)) {
         const barCount = 64;
         const barWidth = width / barCount - 2;
 
-        // Downsample spectrum data to bar count
-        const samplesPerBar = Math.floor(spectrum.length / barCount);
+        const sampleRate = analysisData.sampleRate || 44100;
+        const nyquist = sampleRate / 2;
+        const maxFreq = Math.min(20000, nyquist);
+        const minFreq = 20;
+
+        const floatSpectrum = analysisData.floatSpectrum;
+        const byteSpectrum = analysisData.spectrum;
+        const bins = analysisData.frequencyBinCount || (byteSpectrum ? byteSpectrum.length : 0);
+        const minDb = analysisData.minDecibels ?? -100;
+        const maxDb = analysisData.maxDecibels ?? 0;
+
+        const edges: number[] = [];
+        for (let i = 0; i <= barCount; i++) {
+          const t = i / barCount;
+          const f = minFreq * Math.pow(maxFreq / minFreq, t);
+          const idx = Math.max(0, Math.min(bins - 1, Math.floor((f / nyquist) * bins)));
+          edges.push(idx);
+        }
 
         for (let i = 0; i < barCount; i++) {
-          let sum = 0;
-          const start = i * samplesPerBar;
-          const end = Math.min(start + samplesPerBar, spectrum.length);
-          
+          const start = edges[i];
+          const end = Math.max(start + 1, edges[i + 1]);
+          let sumDb = 0;
+          let count = 0;
+
           for (let j = start; j < end; j++) {
-            sum += spectrum[j];
+            const db = floatSpectrum ? floatSpectrum[j] : ((byteSpectrum![j] / 255) * (maxDb - minDb) + minDb);
+            sumDb += db;
+            count++;
           }
-          
-          const avgValue = sum / (end - start);
-          
-          // Smooth with previous value
-          barsRef.current[i] = barsRef.current[i] * 0.7 + (avgValue / 255) * 0.3;
-          
+
+          const avgDb = count > 0 ? sumDb / count : minDb;
+          const norm = Math.max(0, Math.min(1, (avgDb - minDb) / (maxDb - minDb)));
+
+          const prev = barsRef.current[i];
+          const target = norm;
+          const coeff = target > prev ? 0.6 : 0.2;
+          barsRef.current[i] = prev + (target - prev) * coeff;
+
           const x = (width / barCount) * i;
           const barHeight = barsRef.current[i] * (height - 20);
-          
-          // Create gradient for bars
+
           const gradient = ctx.createLinearGradient(0, height - 20 - barHeight, 0, height - 20);
           gradient.addColorStop(0, 'rgb(6, 182, 212)');
           gradient.addColorStop(0.5, 'rgb(8, 145, 178)');
           gradient.addColorStop(1, 'rgb(14, 116, 144)');
-          
+
           ctx.fillStyle = gradient;
           ctx.fillRect(x, height - 20 - barHeight, barWidth, barHeight);
 
-          // Add glow effect
           ctx.shadowBlur = 10;
           ctx.shadowColor = 'rgba(6, 182, 212, 0.5)';
           ctx.fillRect(x, height - 20 - barHeight, barWidth, barHeight);

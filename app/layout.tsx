@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { seoConfig } from "@/lib/seo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,46 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Master Pro - Professional Audio Mastering Plugin",
-  description: "Professional audio mastering plugin with advanced controls and real-time visualization",
+  metadataBase: new URL(seoConfig.siteUrl),
+  title: {
+    default: seoConfig.defaultTitle,
+    template: "%s | " + seoConfig.siteName,
+  },
+  description: seoConfig.defaultDescription,
+  applicationName: seoConfig.siteName,
+  generator: "Next.js",
+  keywords: [
+    "audio",
+    "mastering",
+    "plugin",
+    "saturation",
+    "compressor",
+    "limiter",
+  ],
+  authors: [{ name: seoConfig.siteName }],
+  creator: seoConfig.siteName,
+  publisher: seoConfig.siteName,
+  alternates: {
+    canonical: seoConfig.siteUrl,
+  },
+  openGraph: {
+    type: "website",
+    url: seoConfig.siteUrl,
+    title: seoConfig.defaultTitle,
+    description: seoConfig.defaultDescription,
+    siteName: seoConfig.siteName,
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: seoConfig.twitterHandle,
+    title: seoConfig.defaultTitle,
+    description: seoConfig.defaultDescription,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  themeColor: "#0f172a",
 };
 
 export default function RootLayout({

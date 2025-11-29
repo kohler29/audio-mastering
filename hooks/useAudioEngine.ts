@@ -158,7 +158,6 @@ export function useAudioEngine(): UseAudioEngineReturn {
     if (!engine) return;
 
     try {
-      const wasPlaying = engine.getIsPlaying();
       engine.seek(time);
       setCurrentTime(time);
       // Pastikan state isPlaying tetap sinkron setelah seek
@@ -270,4 +269,3 @@ export function useAudioEngine(): UseAudioEngineReturn {
     getStereoWaveformData,
   };
 }
-

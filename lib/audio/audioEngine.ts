@@ -54,6 +54,11 @@ export interface AudioEngineSettings {
 export interface AudioAnalysisData {
   waveform: Uint8Array;
   spectrum: Uint8Array;
+  floatSpectrum: Float32Array;
+  sampleRate: number;
+  frequencyBinCount: number;
+  minDecibels: number;
+  maxDecibels: number;
   vuLeft: number;
   vuRight: number;
   loudness: {
@@ -1395,9 +1400,11 @@ export class AudioEngine {
 
     const waveform = new Uint8Array(this.analyserNode.fftSize);
     const spectrum = new Uint8Array(this.analyserNode.frequencyBinCount);
+    const floatSpectrum = new Float32Array(this.analyserNode.frequencyBinCount);
 
     this.analyserNode.getByteTimeDomainData(waveform);
     this.analyserNode.getByteFrequencyData(spectrum);
+    this.analyserNode.getFloatFrequencyData(floatSpectrum);
 
     // Get Float32Array for accurate loudness calculation
     const waveformFloat = new Float32Array(this.analyserNode.fftSize);
@@ -1415,6 +1422,11 @@ export class AudioEngine {
     return {
       waveform,
       spectrum,
+      floatSpectrum,
+      sampleRate: this.audioContext.sampleRate,
+      frequencyBinCount: this.analyserNode.frequencyBinCount,
+      minDecibels: this.analyserNode.minDecibels,
+      maxDecibels: this.analyserNode.maxDecibels,
       vuLeft,
       vuRight,
       loudness,

@@ -12,17 +12,6 @@ export interface EffectPreset {
       release: number;
       gain?: number;
     };
-    reverb?: {
-      mix: number;
-      size: number;
-      decay: number;
-      damping: number;
-    };
-    saturation?: {
-      drive: number;
-      mix: number;
-      bias: number;
-    };
   };
 }
 
@@ -40,12 +29,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 5,
         release: 80,
       },
-      reverb: {
-        mix: 15,
-        size: 40,
-        decay: 2.0,
-        damping: 60,
-      },
     },
   },
   loud: {
@@ -57,27 +40,11 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 3,
         release: 50,
       },
-      saturation: {
-        drive: 40,
-        mix: 50,
-        bias: 0,
-      },
     },
   },
   warm: {
     name: 'Warm',
     settings: {
-      saturation: {
-        drive: 30,
-        mix: 45,
-        bias: -10,
-      },
-      reverb: {
-        mix: 25,
-        size: 60,
-        decay: 3.0,
-        damping: 40,
-      },
     },
   },
   bright: {
@@ -93,19 +60,7 @@ export const effectPresets: Record<string, EffectPreset> = {
   },
   vintage: {
     name: 'Vintage',
-    settings: {
-      saturation: {
-        drive: 50,
-        mix: 60,
-        bias: 15,
-      },
-      reverb: {
-        mix: 30,
-        size: 70,
-        decay: 4.0,
-        damping: 30,
-      },
-    },
+    settings: {},
   },
   punchy: {
     name: 'Punchy',
@@ -116,11 +71,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 2,
         release: 60,
         gain: 2,
-      },
-      saturation: {
-        drive: 35,
-        mix: 40,
-        bias: 0,
       },
     },
   },
@@ -133,12 +83,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 15,
         release: 150,
       },
-      reverb: {
-        mix: 20,
-        size: 50,
-        decay: 2.5,
-        damping: 50,
-      },
     },
   },
   aggressive: {
@@ -150,11 +94,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 1,
         release: 40,
         gain: 3,
-      },
-      saturation: {
-        drive: 60,
-        mix: 70,
-        bias: 5,
       },
     },
   },
@@ -177,17 +116,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         ratio: 3.5,
         attack: 5,
         release: 90,
-      },
-      saturation: {
-        drive: 25,
-        mix: 35,
-        bias: -15,
-      },
-      reverb: {
-        mix: 18,
-        size: 55,
-        decay: 3.5,
-        damping: 45,
       },
     },
   },
@@ -222,12 +150,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 12,
         release: 130,
       },
-      reverb: {
-        mix: 12,
-        size: 35,
-        decay: 1.8,
-        damping: 55,
-      },
     },
   },
   epic: {
@@ -239,17 +161,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 4,
         release: 70,
         gain: 2.5,
-      },
-      saturation: {
-        drive: 45,
-        mix: 55,
-        bias: 10,
-      },
-      reverb: {
-        mix: 35,
-        size: 80,
-        decay: 4.5,
-        damping: 25,
       },
     },
   },
@@ -263,11 +174,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         release: 85,
         gain: 1.5,
       },
-      saturation: {
-        drive: 30,
-        mix: 45,
-        bias: -5,
-      },
     },
   },
   rock: {
@@ -279,17 +185,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 2.5,
         release: 55,
         gain: 2,
-      },
-      saturation: {
-        drive: 55,
-        mix: 65,
-        bias: 8,
-      },
-      reverb: {
-        mix: 22,
-        size: 45,
-        decay: 2.8,
-        damping: 50,
       },
     },
   },
@@ -303,11 +198,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         release: 45,
         gain: 3,
       },
-      saturation: {
-        drive: 40,
-        mix: 50,
-        bias: 0,
-      },
     },
   },
   acoustic: {
@@ -318,12 +208,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         ratio: 2.2,
         attack: 9,
         release: 115,
-      },
-      reverb: {
-        mix: 20,
-        size: 50,
-        decay: 2.2,
-        damping: 50,
       },
     },
   },
@@ -336,17 +220,6 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 5,
         release: 80,
         gain: 2,
-      },
-      saturation: {
-        drive: 35,
-        mix: 40,
-        bias: -8,
-      },
-      reverb: {
-        mix: 40,
-        size: 85,
-        decay: 5.0,
-        damping: 20,
       },
     },
   },
@@ -400,4 +273,3 @@ export function calculateStereoWidth(width: number): { midGain: number; sideGain
   const sideGain = widthValue;
   return { midGain, sideGain };
 }
-

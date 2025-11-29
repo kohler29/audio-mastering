@@ -2,10 +2,9 @@
  * Parameter Manager - Terpisah dari React UI
  * Menggunakan debounce/throttle untuk optimasi update
  */
+import type { AudioEngineSettings } from '@/lib/audio/audioEngine';
 
-export interface ParameterUpdate {
-  [key: string]: any;
-}
+export type ParameterUpdate = Partial<AudioEngineSettings>;
 
 type UpdateCallback = (settings: ParameterUpdate) => void;
 
@@ -23,8 +22,8 @@ export class ParameterManager {
   /**
    * Update parameter dengan debounce (untuk non-critical updates)
    */
-  updateParameter(key: string, value: any): void {
-    this.pendingUpdates[key] = value;
+  updateParameter<K extends keyof ParameterUpdate>(key: K, value: ParameterUpdate[K]): void {
+    this.pendingUpdates[key] = value as ParameterUpdate[K];
 
     if (this.updateTimer !== null) {
       clearTimeout(this.updateTimer);
@@ -38,8 +37,8 @@ export class ParameterManager {
   /**
    * Update parameter secara immediate (untuk critical parameters seperti gain)
    */
-  updateParameterImmediate(key: string, value: any): void {
-    this.pendingUpdates[key] = value;
+  updateParameterImmediate<K extends keyof ParameterUpdate>(key: K, value: ParameterUpdate[K]): void {
+    this.pendingUpdates[key] = value as ParameterUpdate[K];
     this.flushUpdates();
   }
 
@@ -92,4 +91,3 @@ export class ParameterManager {
     this.updateCallback = () => {};
   }
 }
-
