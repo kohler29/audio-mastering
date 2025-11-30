@@ -541,9 +541,9 @@ export function AudioMasteringPlugin() {
     setToasts((prev) => [...prev, { id, message, type }]);
   };
 
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  };
+  }, []);
 
   const handleSavePreset = async () => {
     if (!presetName.trim()) {

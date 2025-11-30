@@ -27,7 +27,8 @@ export function Toast({ toast, onClose }: ToastProps) {
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [toast.id, toast.type, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast.id, toast.type]); // onClose tidak perlu di dependency karena function reference stabil
 
   const getIcon = () => {
     switch (toast.type) {
