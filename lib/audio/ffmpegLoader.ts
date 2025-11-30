@@ -24,7 +24,6 @@ function getBaseUrl(): string {
     
     // Gunakan origin saat ini (ngrok atau localhost)
     const origin = window.location.origin;
-    console.log('[FFmpegLoader] Using base URL:', origin);
     return origin;
 }
 
@@ -62,7 +61,6 @@ async function loadScript(src: string): Promise<void> {
         });
         
         if (alreadyLoaded) {
-            console.log('[FFmpegLoader] Script already loaded (similar):', src);
             // Give it a moment to ensure it's fully initialized
             setTimeout(() => resolve(), 100);
             return;
@@ -76,7 +74,6 @@ async function loadScript(src: string): Promise<void> {
         // Use both onload and a small delay to ensure script execution completes
         let resolved = false;
         s.onload = () => {
-            console.log('[FFmpegLoader] Script onload event fired:', src);
             // Give script a moment to execute and expose globals
             setTimeout(() => {
                 if (!resolved) {
@@ -94,7 +91,6 @@ async function loadScript(src: string): Promise<void> {
         // Also resolve after a timeout as fallback
         setTimeout(() => {
             if (!resolved) {
-                console.log('[FFmpegLoader] Script load timeout, assuming loaded:', src);
                 resolved = true;
                 resolve();
             }
@@ -114,14 +110,12 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
     }
 
     if (ffmpegInstance) {
-        console.log('[FFmpegLoader] Using cached instance');
         return ffmpegInstance;
     }
 
     try {
         // First, try dynamic import with explicit string (works better with Next.js webpack)
         try {
-            console.log('[FFmpegLoader] Attempting dynamic import of @ffmpeg/ffmpeg...');
             // Use explicit string to avoid "expression is too dynamic" error
             const ffmpegModule = await import('@ffmpeg/ffmpeg');
             
@@ -129,31 +123,17 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
             const FFmpegClass = ffmpegModule.FFmpeg || (ffmpegModule as any).default?.FFmpeg || (ffmpegModule as any).default;
             
             if (FFmpegClass && typeof FFmpegClass === 'function') {
-                console.log('[FFmpegLoader] Successfully imported FFmpeg via dynamic import');
                 const ffmpeg = new FFmpegClass();
                 
-                // Setup logging
-                if (typeof ffmpeg.on === 'function') {
-                    ffmpeg.on('log', ({ message }: { message: string }) => {
-                        console.log('[FFmpeg]', message);
-                    });
-                    ffmpeg.on('progress', ({ progress, time }: { progress: number; time: number }) => {
-                        console.log(`[FFmpeg] Progress: ${(progress * 100).toFixed(2)}% (time: ${time})`);
-                    });
-                }
-                
-                console.log('[FFmpeg] Loading core...');
                 // Pre-load worker as blob to avoid CORS issues
                 let workerBlobURL: string | null = null;
                 
                 try {
-                    console.log('[FFmpegLoader] Pre-loading worker file as blob to avoid CORS...');
                     const workerUrl = getFFmpegResourceUrl('/ffmpeg/umd/814.ffmpeg.js');
                     const workerResponse = await fetch(workerUrl);
                     if (workerResponse.ok) {
                         const workerBlob = await workerResponse.blob();
                         workerBlobURL = URL.createObjectURL(workerBlob);
-                        console.log('[FFmpegLoader] Worker file loaded as blob from:', workerUrl);
                     } else {
                         console.warn('[FFmpegLoader] Worker file not found, may cause CORS issues');
                     }
@@ -169,7 +149,6 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
                 // If we have worker blob, use it
                 if (workerBlobURL) {
                     loadOptions.mainScriptUrlOrBlob = workerBlobURL;
-                    console.log('[FFmpegLoader] Using local worker blob URL');
                 }
                 
                 try {
@@ -191,7 +170,6 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
                         loadErr.name === 'SecurityError' ||
                         loadErr.message.includes('CORS')
                     )) {
-                        console.log('[FFmpegLoader] Worker CORS error, trying without worker config...');
                         // Try loading without worker configuration
                         const noWorkerOptions = {
                             coreURL: getFFmpegResourceUrl('/ffmpeg/ffmpeg-core.js'),
@@ -202,8 +180,6 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
                         throw loadErr;
                     }
                 }
-                
-                console.log('[FFmpeg] Loaded successfully via dynamic import');
                 
                 // Wrap dalam interface yang konsisten
                 ffmpegInstance = {
@@ -229,11 +205,8 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
                 return ffmpegInstance;
             }
         } catch (importErr) {
-            console.log('[FFmpegLoader] Dynamic import failed, falling back to UMD:', importErr);
             // Fall through to UMD approach
         }
-        
-        console.log('[FFmpegLoader] Loading FFmpeg via UMD...');
 
         // Check if FFmpeg is already available globally - try multiple ways
         const checkGlobal = () => {
@@ -291,34 +264,25 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
             // Local UMD will use local worker files, avoiding CDN CORS
             // Using base URL ensures ngrok compatibility
             try {
-                console.log('[FFmpegLoader] Trying local UMD first (to avoid worker CORS):', localUmd);
                 const localCheck = await fetch(localUmd, { method: 'HEAD' });
                 if (localCheck.ok) {
-                    console.log('[FFmpegLoader] Local UMD exists, loading...');
                     await loadScript(localUmd);
                     scriptLoaded = true;
                     loadedFrom = 'local';
-                    console.log('[FFmpegLoader] Local UMD script loaded successfully');
                 } else {
                     throw new Error('Local UMD file not found (404)');
                 }
             } catch (localErr) {
-                console.log('[FFmpegLoader] Local UMD failed, trying CDN:', localErr);
                 // Fallback to CDN if local not available
                 try {
-                    console.log('[FFmpegLoader] Trying CDN UMD:', cdnUmd);
                     await loadScript(cdnUmd);
                     scriptLoaded = true;
                     loadedFrom = 'CDN (unpkg)';
-                    console.log('[FFmpegLoader] CDN UMD script loaded successfully');
                 } catch (cdnErr) {
-                    console.log('[FFmpegLoader] First CDN failed, trying alternative CDN:', cdnErr);
                     try {
-                        console.log('[FFmpegLoader] Trying alternative CDN:', cdnUmdAlt);
                         await loadScript(cdnUmdAlt);
                         scriptLoaded = true;
                         loadedFrom = 'CDN (jsdelivr)';
-                        console.log('[FFmpegLoader] Alternative CDN UMD script loaded successfully');
                     } catch (cdnAltErr) {
                         console.error('[FFmpegLoader] All sources failed');
                         throw new Error(`Failed to load FFmpeg UMD from local (${localErr instanceof Error ? localErr.message : String(localErr)}), CDN (${cdnErr instanceof Error ? cdnErr.message : String(cdnErr)}), and alternative CDN (${cdnAltErr instanceof Error ? cdnAltErr.message : String(cdnAltErr)})`);
@@ -329,17 +293,6 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
             if (!scriptLoaded) {
                 throw new Error('Script loading reported success but scriptLoaded flag is false');
             }
-            
-            console.log('[FFmpegLoader] Script loaded from:', loadedFrom);
-            
-            // Immediately check what the script exposed
-            const immediateCheck = checkGlobal();
-            console.log('[FFmpegLoader] Immediate check after script load:', {
-                hasFFmpegModule: !!immediateCheck.ffmpegModule,
-                hasCreateFFmpeg: !!immediateCheck.createFFmpegFn,
-                ffmpegModuleType: typeof immediateCheck.ffmpegModule,
-                createFFmpegType: typeof immediateCheck.createFFmpegFn,
-            });
             
             // Wait for script to initialize - try multiple times with increasing delays
             let attempts = 0;
@@ -354,74 +307,9 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
                 createFFmpegFn = result.createFFmpegFn;
                 attempts++;
                 
-                if (!ffmpegModule && !createFFmpegFn && attempts < maxAttempts) {
-                    // Debug: log what's actually in global scope - more comprehensive
-                    const g = globalThis as any;
-                    const w = window as any;
-                    
-                    // Get all keys that might be relevant
-                    const allGlobalKeys = Object.keys(g).filter(k => {
-                        const lower = k.toLowerCase();
-                        return lower.includes('ff') || lower.includes('mp') || lower.includes('create') || lower.includes('video') || lower.includes('wasm');
-                    });
-                    const allWindowKeys = Object.keys(w).filter(k => {
-                        const lower = k.toLowerCase();
-                        return lower.includes('ff') || lower.includes('mp') || lower.includes('create') || lower.includes('video') || lower.includes('wasm');
-                    });
-                    
-                    // Try to access via different patterns
-                    const testAccess = {
-                        'window.FFmpeg': w.FFmpeg,
-                        'window.createFFmpeg': w.createFFmpeg,
-                        'globalThis.FFmpeg': g.FFmpeg,
-                        'globalThis.createFFmpeg': g.createFFmpeg,
-                        'window["@ffmpeg/ffmpeg"]': w['@ffmpeg/ffmpeg'],
-                        'window.ffmpeg': w.ffmpeg,
-                    };
-                    
-                    const debugInfo = {
-                        attempt: attempts,
-                        maxAttempts,
-                        delay,
-                        globalThisKeys: allGlobalKeys,
-                        windowKeys: allWindowKeys,
-                        testAccess,
-                        // Check for common UMD patterns
-                        hasModule: !!g.module,
-                        hasExports: !!g.exports,
-                        hasDefine: typeof g.define === 'function',
-                        hasRequire: typeof g.require === 'function',
-                        // Check if script is in DOM
-                        scriptInDOM: !!document.querySelector(`script[src*="ffmpeg"]`),
-                    };
-                    console.log('[FFmpegLoader] Waiting for FFmpeg...', debugInfo);
-                    
-                    // Also check if script tag was actually added
-                    const scripts = Array.from(document.querySelectorAll('script[src*="ffmpeg"]'));
-                    console.log('[FFmpegLoader] FFmpeg script tags found:', scripts.map(s => (s as HTMLScriptElement).src));
-                    
-                    // Try to manually inspect the script content if possible
-                    if (attempts === 5) {
-                        console.log('[FFmpegLoader] Attempting to inspect window object more deeply...');
-                        // Log first 100 keys of window to see if FFmpeg is there with different casing
-                        const windowKeys = Object.keys(w).slice(0, 100);
-                        const ffmpegLikeKeys = windowKeys.filter(k => {
-                            const lower = k.toLowerCase();
-                            return lower.includes('ff') || lower.includes('mp');
-                        });
-                        console.log('[FFmpegLoader] Window keys containing ff/mp:', ffmpegLikeKeys);
-                    }
-                }
+                // Wait for script to initialize
             }
         }
-
-        // Debug: log what we found
-        console.log('[FFmpegLoader] Found in global scope:', {
-            hasFFmpegModule: !!ffmpegModule,
-            hasCreateFFmpeg: !!createFFmpegFn,
-            ffmpegModuleType: typeof ffmpegModule,
-            createFFmpegType: typeof createFFmpegFn,
-        });
 
         // Handle both old (createFFmpeg) and new (FFmpeg class) API
         let ffmpeg: any;
@@ -429,7 +317,6 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
         
         if (createFFmpegFn && typeof createFFmpegFn === 'function') {
             // Old API: use createFFmpeg function
-            console.log('[FFmpegLoader] Using createFFmpeg function (old API)');
             isOldAPI = true;
             const corePath = getFFmpegResourceUrl('/ffmpeg/ffmpeg-core.js');
             ffmpeg = createFFmpegFn({ log: true, corePath });
@@ -454,33 +341,17 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
                 throw new Error(`FFmpeg class not found or not a function. Found: ${typeof FFmpegClass}`);
             }
 
-            console.log('[FFmpegLoader] Creating FFmpeg instance from class...');
             ffmpeg = new FFmpegClass();
 
-            // Setup logging (only for new API)
-            if (typeof ffmpeg.on === 'function') {
-                ffmpeg.on('log', ({ message }: { message: string }) => {
-                    console.log('[FFmpeg]', message);
-                });
-
-                ffmpeg.on('progress', ({ progress, time }: { progress: number; time: number }) => {
-                    console.log(`[FFmpeg] Progress: ${(progress * 100).toFixed(2)}% (time: ${time})`);
-                });
-            }
-
-            console.log('[FFmpeg] Loading core...');
-            // Gunakan file lokal yang sudah ada di public/ffmpeg
             // Pre-load worker as blob to avoid CORS issues
             let workerBlobURL: string | null = null;
             
             try {
-                console.log('[FFmpegLoader] Pre-loading worker file as blob to avoid CORS...');
                 const workerUrl = getFFmpegResourceUrl('/ffmpeg/umd/814.ffmpeg.js');
                 const workerResponse = await fetch(workerUrl);
                 if (workerResponse.ok) {
                     const workerBlob = await workerResponse.blob();
                     workerBlobURL = URL.createObjectURL(workerBlob);
-                    console.log('[FFmpegLoader] Worker file loaded as blob from:', workerUrl);
                 } else {
                     console.warn('[FFmpegLoader] Worker file not found, may cause CORS issues');
                 }
@@ -494,17 +365,8 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
             };
             
             // If we have worker blob, use it
-            // For FFmpeg 0.12.x, the worker is loaded automatically by the core
-            // But we can configure it via mainScriptUrlOrBlob to use our blob URL
             if (workerBlobURL) {
-                // For FFmpeg 0.12.x, mainScriptUrlOrBlob tells the core where to find the worker
-                // This should be a blob URL or a local path
                 loadOptions.mainScriptUrlOrBlob = workerBlobURL;
-                console.log('[FFmpegLoader] Configured to use local worker blob URL');
-            } else {
-                // If no worker blob, try to use local path directly
-                // Some versions might auto-detect from the same origin
-                console.log('[FFmpegLoader] No worker blob, FFmpeg will try to auto-detect worker');
             }
             
             try {
@@ -526,19 +388,14 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
                     loadErr.name === 'SecurityError' ||
                     loadErr.message.includes('CORS')
                 )) {
-                    console.log('[FFmpegLoader] Worker CORS error still occurred, trying without worker...');
-                    
                     // Some FFmpeg versions can work without worker (main thread mode)
                     // Try loading without worker configuration
                     try {
                         const noWorkerOptions: any = {
                             coreURL: getFFmpegResourceUrl('/ffmpeg/ffmpeg-core.js'),
                             wasmURL: getFFmpegResourceUrl('/ffmpeg/ffmpeg-core.wasm'),
-                            // Try to disable worker or use main thread
                         };
                         
-                        // For some versions, we might need to set a flag
-                        console.log('[FFmpegLoader] Attempting load without worker configuration...');
                         await ffmpeg.load(noWorkerOptions);
                     } catch (noWorkerErr) {
                         console.error('[FFmpegLoader] Failed to load FFmpeg core:', loadErr);
@@ -587,15 +444,8 @@ export async function getFFmpegInstance(): Promise<FFmpegInstance> {
                 })),
             });
             
-            // Try one more thing - check if it's in a module system
-            if (typeof (window as any).define === 'function' && (window as any).define.amd) {
-                console.log('[FFmpegLoader] AMD module system detected, but FFmpeg not found');
-            }
-            
-            throw new Error('FFmpeg UMD loaded but not found in global scope after multiple attempts. Check console for detailed debug info.');
+            throw new Error('FFmpeg UMD loaded but not found in global scope after multiple attempts.');
         }
-
-        console.log('[FFmpeg] Loaded successfully');
 
         // Store API type for use in wrapper functions
         const usingOldAPI = isOldAPI;

@@ -199,9 +199,7 @@ export class AudioEngine {
 
       // Set up listener untuk state changes
       this.audioContext.addEventListener('statechange', () => {
-        if (this.audioContext?.state === 'running') {
-          console.log('Audio context is now running');
-        }
+        // Audio context state changed
       });
 
       // Jangan menunggu resume() - langsung resolve untuk menghindari hang
@@ -1570,18 +1568,9 @@ export class AudioEngine {
     if (numberOfChannels > 1) {
       // Stereo: ambil channel 1 secara terpisah
       rightChannelData = this.audioBuffer.getChannelData(1);
-      console.log('Stereo audio detected:', {
-        channels: numberOfChannels,
-        leftLength: leftChannelData.length,
-        rightLength: rightChannelData.length,
-        leftSample0: leftChannelData[0],
-        rightSample0: rightChannelData[0],
-        areDifferent: leftChannelData[0] !== rightChannelData[0]
-      });
     } else {
       // Mono: copy channel 0 ke array baru supaya tidak share reference
       rightChannelData = new Float32Array(leftChannelData);
-      console.log('Mono audio detected, copying channel 0 to right');
     }
 
     const length = leftChannelData.length;
@@ -1610,13 +1599,6 @@ export class AudioEngine {
       }
       rightWaveform[i] = maxRight;
     }
-
-    console.log('Generated waveform arrays:', {
-      leftWaveformLength: leftWaveform.length,
-      rightWaveformLength: rightWaveform.length,
-      leftWaveform0: leftWaveform[0],
-      rightWaveform0: rightWaveform[0],
-      leftWaveform100: leftWaveform[100],
       rightWaveform100: rightWaveform[100],
       areSameArray: leftWaveform === rightWaveform
     });
@@ -3018,11 +3000,8 @@ export class AudioEngine {
 
           // Untuk MP3/FLAC, transcode dengan ffmpeg.wasm
           try {
-            console.log('[Export] Attempting to load FFmpeg...');
             const { getFFmpegInstance, fetchFile } = await import('./ffmpegLoader');
             const ffmpeg = await getFFmpegInstance();
-
-            console.log('[Export] FFmpeg loaded successfully');
 
             // Tulis input WAV ke FS
             const inputName = 'input.wav';
@@ -3032,22 +3011,16 @@ export class AudioEngine {
             if (format === 'mp3') {
               // MP3 320kbps CBR
               const outputName = 'output.mp3';
-              console.log('[Export] Converting to MP3...');
               await ffmpeg.exec(['-i', inputName, '-b:a', '320k', '-codec:a', 'libmp3lame', outputName]);
               const data = await ffmpeg.readFile(outputName);
-              // Buat salinan baru untuk memastikan kompatibilitas dengan Blob
-              console.log('[Export] MP3 conversion complete');
               return new Blob([new Uint8Array(data)], { type: 'audio/mpeg' });
             }
 
             if (format === 'flac') {
               // FLAC lossless
               const outputName = 'output.flac';
-              console.log('[Export] Converting to FLAC...');
               await ffmpeg.exec(['-i', inputName, '-c:a', 'flac', outputName]);
               const data = await ffmpeg.readFile(outputName);
-              // Buat salinan baru untuk memastikan kompatibilitas dengan Blob
-              console.log('[Export] FLAC conversion complete');
               return new Blob([new Uint8Array(data)], { type: 'audio/flac' });
             }
           } catch (ffmpegErr: unknown) {
@@ -3458,7 +3431,6 @@ export class AudioEngine {
   }> {
     // Return cached instance if available
     if (this.ffmpegLoaderCache) {
-      console.log('[FFmpeg] Using cached loader');
       return this.ffmpegLoaderCache;
     }
 
@@ -3474,7 +3446,6 @@ export class AudioEngine {
 
     // Di browser, langsung gunakan UMD untuk kompatibilitas maksimal
     if (typeof window !== 'undefined') {
-      console.log('[FFmpeg] Browser detected, using UMD approach');
 
       // Cek apakah sudah ada di global
       const g = globalThis as any;
@@ -3486,7 +3457,6 @@ export class AudioEngine {
 
       let ffmpegGlobal = checkGlobal();
       if (ffmpegGlobal?.createFFmpeg && ffmpegGlobal?.fetchFile) {
-        console.log('[FFmpeg] Found existing global FFmpeg');
         this.ffmpegLoaderCache = {
           createFFmpegFn: ffmpegGlobal.createFFmpeg,
           fetchFileFn: ffmpegGlobal.fetchFile
@@ -3496,25 +3466,15 @@ export class AudioEngine {
 
       // Load UMD script
       const umdUrl = (process.env.NEXT_PUBLIC_FFMPEG_UMD_URL || '').trim() || 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js';
-      console.log('[FFmpeg] Loading UMD from:', umdUrl);
 
       try {
         await this.loadScript(umdUrl);
-        console.log('[FFmpeg] UMD script loaded successfully');
 
         // Tunggu sebentar untuk memastikan script selesai inisialisasi
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Check global again dengan berbagai kemungkinan
         ffmpegGlobal = checkGlobal();
-
-        console.log('[FFmpeg] Global state after load:', {
-          hasFFmpeg: !!ffmpegGlobal,
-          hasCreateFFmpeg: !!ffmpegGlobal?.createFFmpeg,
-          hasFetchFile: !!ffmpegGlobal?.fetchFile,
-          globalKeys: ffmpegGlobal ? Object.keys(ffmpegGlobal) : [],
-          windowKeys: Object.keys(window).filter(k => k.toLowerCase().includes('ffmpeg'))
-        });
 
         const createFFmpegFn = ffmpegGlobal?.createFFmpeg;
         const fetchFileFn = ffmpegGlobal?.fetchFile;
@@ -3525,7 +3485,6 @@ export class AudioEngine {
           const altFetch = (window as any).fetchFile;
 
           if (altCreate && altFetch) {
-            console.log('[FFmpeg] Found functions directly on window');
             this.ffmpegLoaderCache = {
               createFFmpegFn: altCreate,
               fetchFileFn: altFetch
@@ -3537,7 +3496,6 @@ export class AudioEngine {
         }
 
         this.ffmpegLoaderCache = { createFFmpegFn, fetchFileFn };
-        console.log('[FFmpeg] UMD loader cached successfully');
         return this.ffmpegLoaderCache;
       } catch (err) {
         console.error('[FFmpeg] UMD loading failed:', err);
@@ -3546,7 +3504,6 @@ export class AudioEngine {
     }
 
     // Server-side: try ESM import
-    console.log('[FFmpeg] Server-side detected, trying ESM import');
     try {
       const mod = (await import('@ffmpeg/ffmpeg')) as unknown as FF;
       const createFFmpegFn = mod.createFFmpeg || mod.default?.createFFmpeg;
