@@ -369,6 +369,13 @@ export function AudioMasteringPlugin() {
     await processAudioFile(file);
   };
 
+  const handleFileInputClick = (e: React.MouseEvent<HTMLLabelElement>) => {
+    // Prevent label click from triggering file input multiple times on mobile
+    if (!isInitialized || isLoading) {
+      e.preventDefault();
+    }
+  };
+
   const handlePlayPause = useCallback(() => {
     if (isPlaying) {
       pause();
@@ -670,18 +677,23 @@ export function AudioMasteringPlugin() {
         </div>
         <div className="flex items-center gap-2 md:gap-4 flex-wrap md:flex-nowrap order-2 md:order-0 w-full md:w-auto overflow-x-auto whitespace-nowrap">
           {/* Upload Button */}
-          <label aria-label="Upload audio file" className={`bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 transition-colors flex items-center gap-2 ${
-            !isInitialized || isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-          }`}>
+          <label 
+            aria-label="Upload audio file" 
+            onClick={handleFileInputClick}
+            className={`bg-zinc-700 hover:bg-zinc-600 active:bg-zinc-500 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 transition-colors flex items-center gap-2 touch-manipulation ${
+              !isInitialized || isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+            }`}
+          >
             <Upload className="w-4 h-4" />
             <span className="text-sm">Upload</span>
             <input
               type="file"
-              accept="audio/*"
+              accept="audio/*,audio/mpeg,audio/wav,audio/flac,audio/ogg,audio/aac,audio/mp4"
               onChange={handleFileUpload}
               className="hidden"
               disabled={!isInitialized || isLoading}
               aria-label="Choose audio file"
+              capture="user"
             />
           </label>
 
@@ -828,34 +840,40 @@ export function AudioMasteringPlugin() {
         <div className="col-span-12 md:col-span-6 lg:col-span-7 space-y-4">
           {/* Waveform Display */}
           <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700 relative">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-zinc-400 text-xs tracking-wider">WAVEFORM</h3>
-              <div className="flex gap-2">
-              <button 
-                onClick={() => handleSeek(0)}
-                aria-label="Seek to start"
-                className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!audioFile || isLoading}
-              >
-                <SkipBack className="w-3 h-3" />
-              </button>
-              <button 
-                onClick={handlePlayPause}
-                aria-label={isPlaying ? 'Pause' : 'Play'}
-                className="bg-cyan-600 hover:bg-cyan-500 text-white p-1.5 rounded transition-colors disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed"
-                disabled={!audioFile || isLoading}
-                title={isPlaying ? 'Pause (Spasi)' : 'Play (Spasi)'}
-              >
-                {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-              </button>
-                <button 
-                  onClick={handleStop}
-                  aria-label="Stop"
-                  className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={!audioFile || isLoading}
-                >
-                  <SkipForward className="w-3 h-3" />
-                </button>
+            <div className="flex flex-col gap-3 mb-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-zinc-400 text-xs tracking-wider">WAVEFORM</h3>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Playback Controls */}
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => handleSeek(0)}
+                    aria-label="Seek to start"
+                    className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!audioFile || isLoading}
+                  >
+                    <SkipBack className="w-3 h-3" />
+                  </button>
+                  <button 
+                    onClick={handlePlayPause}
+                    aria-label={isPlaying ? 'Pause' : 'Play'}
+                    className="bg-cyan-600 hover:bg-cyan-500 text-white p-1.5 rounded transition-colors disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed"
+                    disabled={!audioFile || isLoading}
+                    title={isPlaying ? 'Pause (Spasi)' : 'Play (Spasi)'}
+                  >
+                    {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                  </button>
+                  <button 
+                    onClick={handleStop}
+                    aria-label="Stop"
+                    className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!audioFile || isLoading}
+                  >
+                    <SkipForward className="w-3 h-3" />
+                  </button>
+                </div>
+                {/* A/B Toggle */}
                 <button
                   onClick={handleToggleAB}
                   aria-label={isShowingOriginal ? 'Show Mastered (B)' : 'Show Original (A)'}
@@ -869,31 +887,34 @@ export function AudioMasteringPlugin() {
                 >
                   {isShowingOriginal ? 'A' : 'B'}
                 </button>
-                <div className="flex items-center gap-2 ml-2">
-                  <input
-                    type="number"
-                    min={0}
-                    max={10000}
-                    step={100}
-                    value={fadeDurationMs}
-                    onChange={(e) => setFadeDurationMs(Number(e.target.value))}
-                    className="w-20 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs"
-                  />
-                  <span className="text-zinc-500 text-xs">ms</span>
-            <button
-              onClick={() => { setExportFadeInMs(fadeDurationMs); showToast(`Fade In export: ${fadeDurationMs} ms`, 'info'); }}
-              className="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded text-xs border border-emerald-600"
-              disabled={!audioFile || isLoading}
-            >
-              Fade In
-            </button>
-            <button
-              onClick={() => { setExportFadeOutMs(fadeDurationMs); showToast(`Fade Out export: ${fadeDurationMs} ms`, 'info'); }}
-              className="bg-red-700 hover:bg-red-600 text-white px-2 py-1 rounded text-xs border border-red-600"
-              disabled={!audioFile || isLoading}
-            >
-              Fade Out
-            </button>
+                {/* Fade Controls */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={0}
+                      max={10000}
+                      step={100}
+                      value={fadeDurationMs}
+                      onChange={(e) => setFadeDurationMs(Number(e.target.value))}
+                      className="w-16 sm:w-20 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs"
+                    />
+                    <span className="text-zinc-500 text-xs whitespace-nowrap">ms</span>
+                  </div>
+                  <button
+                    onClick={() => { setExportFadeInMs(fadeDurationMs); showToast(`Fade In export: ${fadeDurationMs} ms`, 'info'); }}
+                    className="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded text-xs border border-emerald-600 whitespace-nowrap"
+                    disabled={!audioFile || isLoading}
+                  >
+                    Fade In
+                  </button>
+                  <button
+                    onClick={() => { setExportFadeOutMs(fadeDurationMs); showToast(`Fade Out export: ${fadeDurationMs} ms`, 'info'); }}
+                    className="bg-red-700 hover:bg-red-600 text-white px-2 py-1 rounded text-xs border border-red-600 whitespace-nowrap"
+                    disabled={!audioFile || isLoading}
+                  >
+                    Fade Out
+                  </button>
                 </div>
               </div>
             </div>

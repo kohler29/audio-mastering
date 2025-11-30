@@ -97,16 +97,29 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
     return normalized * 60 - 60;
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Helper function to get coordinates from mouse or touch event
+  const getEventCoordinates = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
+    rect: DOMRect
+  ): { x: number; y: number } => {
+    if ('touches' in e && e.touches.length > 0) {
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top,
+      };
+    }
+    // Type guard untuk MouseEvent
+    if ('clientX' in e) {
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+    }
+    // Fallback (shouldn't happen)
+    return { x: 0, y: 0 };
+  };
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const width = rect.width;
-    const height = rect.height;
-
+  const handleInteraction = (x: number, y: number, width: number, height: number) => {
     // Check if clicking on a crossover point
     for (let i = 1; i < bands.length; i++) {
       const crossoverX = freqToPosition(bands[i].lowFreq, width);
@@ -141,16 +154,26 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const width = rect.width;
-    const height = rect.height;
+    const { x, y } = getEventCoordinates(e, rect);
+    handleInteraction(x, y, rect.width, rect.height);
+  };
 
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const { x, y } = getEventCoordinates(e, rect);
+    handleInteraction(x, y, rect.width, rect.height);
+  };
+
+  const handleMove = (x: number, y: number, width: number, height: number, canvas: HTMLCanvasElement) => {
     if (dragStateRef.current.isDragging) {
       if (dragStateRef.current.type === 'threshold') {
         const db = positionToDb(y, height);
@@ -169,7 +192,7 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
       return;
     }
 
-    // Update hover state
+    // Update hover state (only for mouse, not touch)
     let newHover: { type: 'threshold' | 'crossover' | 'band' | null; index: number } = { type: null, index: -1 };
 
     // Check crossover hover
@@ -214,7 +237,30 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
     setHoveredElement({ type: null, index: -1 });
   };
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const { x, y } = getEventCoordinates(e, rect);
+    handleMove(x, y, rect.width, rect.height, canvas);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const { x, y } = getEventCoordinates(e, rect);
+    handleMove(x, y, rect.width, rect.height, canvas);
+  };
+
   const handleMouseUp = () => {
+    dragStateRef.current = { isDragging: false, type: null, bandIndex: -1 };
+  };
+
+  const handleTouchEnd = () => {
     dragStateRef.current = { isDragging: false, type: null, bandIndex: -1 };
   };
 
@@ -551,12 +597,15 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
       <div className={`relative ${!enabled ? 'pointer-events-none opacity-50' : ''}`}>
         <canvas
           ref={canvasRef}
-          className="w-full rounded-lg bg-zinc-900/30 border border-zinc-800"
+          className="w-full rounded-lg bg-zinc-900/30 border border-zinc-800 touch-none"
           style={{ width: '100%', height: '200px' }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         />
         {/* Helper tooltip */}
         {hoveredElement.type && (
@@ -722,4 +771,5 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
     </div>
   );
 }
+
 

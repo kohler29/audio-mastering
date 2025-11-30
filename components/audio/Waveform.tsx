@@ -506,13 +506,25 @@ export function Waveform({ leftWaveformData, rightWaveformData, currentTime, dur
     return () => window.removeEventListener('resize', resizeCanvas);
   }, []);
 
+  // Helper function to get X coordinate from mouse or touch event
+  const getEventX = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, rect: DOMRect): number => {
+    if ('touches' in e && e.touches.length > 0) {
+      return e.touches[0].clientX - rect.left;
+    }
+    // Type guard untuk MouseEvent
+    if ('clientX' in e) {
+      return e.clientX - rect.left;
+    }
+    // Fallback (shouldn't happen)
+    return 0;
+  };
+
   // Mouse event handlers
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas || !duration) return;
 
     const rect = canvas.getBoundingClientRect();
-    // Gunakan koordinat CSS langsung karena context sudah di-scale
     const x = e.clientX - rect.left;
     
     setHoverX(x);
@@ -527,24 +539,20 @@ export function Waveform({ leftWaveformData, rightWaveformData, currentTime, dur
     const canvas = canvasRef.current;
     if (!canvas || !duration) return;
 
-    e.preventDefault(); // Prevent default behavior
+    e.preventDefault();
     
     const rect = canvas.getBoundingClientRect();
-    // Gunakan koordinat CSS langsung karena context sudah di-scale
     const x = e.clientX - rect.left;
     
     if (e.shiftKey) {
-      // Start region selection
       setIsDragging(true);
       setDragStart(x);
       setDragEnd(x);
     } else {
-      // Pastikan state dragging di-reset
       setIsDragging(false);
       setDragStart(null);
       setDragEnd(null);
       
-      // Seek to position
       const clickTime = ((x + scrollOffset) / (rect.width * zoom)) * duration;
       const seekTime = Math.max(0, Math.min(clickTime, duration));
       onSeek?.(seekTime);
@@ -552,14 +560,11 @@ export function Waveform({ leftWaveformData, rightWaveformData, currentTime, dur
   };
 
   const handleMouseUp = () => {
-    // Reset dragging state
     setIsDragging(false);
     
-    // Jika tidak ada drag yang signifikan, clear selection
     if (dragStart !== null && dragEnd !== null) {
       const dragDistance = Math.abs(dragEnd - dragStart);
       if (dragDistance < 5) {
-        // Klik kecil, bukan drag - clear selection
         setDragStart(null);
         setDragEnd(null);
       }
@@ -571,15 +576,73 @@ export function Waveform({ leftWaveformData, rightWaveformData, currentTime, dur
     setIsDragging(false);
   };
 
+  // Touch event handlers
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !duration) return;
+
+    e.preventDefault();
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = getEventX(e, rect);
+    
+    setIsDragging(false);
+    setDragStart(null);
+    setDragEnd(null);
+    
+    const clickTime = ((x + scrollOffset) / (rect.width * zoom)) * duration;
+    const seekTime = Math.max(0, Math.min(clickTime, duration));
+    onSeek?.(seekTime);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !duration) return;
+
+    e.preventDefault();
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = getEventX(e, rect);
+    
+    if (isDragging && dragStart !== null) {
+      setDragEnd(x);
+    } else {
+      // Start dragging on touch move
+      if (dragStart === null) {
+        setIsDragging(true);
+        setDragStart(x);
+      }
+      setDragEnd(x);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    
+    if (dragStart !== null && dragEnd !== null) {
+      const dragDistance = Math.abs(dragEnd - dragStart);
+      if (dragDistance < 5) {
+        setDragStart(null);
+        setDragEnd(null);
+      }
+    }
+  };
+
   // Global mouse up handler untuk memastikan state ter-reset bahkan jika mouse keluar dari canvas
   useEffect(() => {
     const handleGlobalMouseUp = () => {
       setIsDragging(false);
     };
 
+    const handleGlobalTouchEnd = () => {
+      setIsDragging(false);
+    };
+
     window.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('touchend', handleGlobalTouchEnd);
     return () => {
       window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('touchend', handleGlobalTouchEnd);
     };
   }, []);
 
@@ -681,12 +744,15 @@ export function Waveform({ leftWaveformData, rightWaveformData, currentTime, dur
       >
         <canvas 
           ref={canvasRef}
-          className="w-full rounded-b-lg cursor-crosshair"
+          className="w-full rounded-b-lg cursor-crosshair touch-none"
           style={{ width: '100%', height: '400px' }}
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         />
         
         {/* Scrollbar */}

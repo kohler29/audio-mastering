@@ -31,6 +31,13 @@ export function Knob({ value, onChange, min, max, label, unit = '', size = 'medi
     startValueRef.current = value;
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    startYRef.current = e.touches[0].clientY;
+    startValueRef.current = value;
+  };
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return;
@@ -42,26 +49,45 @@ export function Knob({ value, onChange, min, max, label, unit = '', size = 'medi
       onChange(Number(newValue.toFixed(1)));
     };
 
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDragging) return;
+
+      const deltaY = startYRef.current - e.touches[0].clientY;
+      const range = max - min;
+      const sensitivity = range / 200;
+      const newValue = Math.max(min, Math.min(max, startValueRef.current + deltaY * sensitivity));
+      onChange(Number(newValue.toFixed(1)));
+    };
+
     const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    const handleTouchEnd = () => {
       setIsDragging(false);
     };
 
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      document.addEventListener('touchend', handleTouchEnd);
     }
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
     };
   }, [isDragging, min, max, onChange]);
 
   return (
     <div className="flex flex-col items-center gap-2">
       <div 
-        className={`relative ${sizeClasses[size].container} cursor-ns-resize select-none`}
+        className={`relative ${sizeClasses[size].container} cursor-ns-resize select-none touch-none`}
         onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
       >
         {/* Knob body */}
         <div className="absolute inset-0 rounded-full bg-linear-to-br from-zinc-700 to-zinc-800 shadow-lg border-2 border-zinc-600">
