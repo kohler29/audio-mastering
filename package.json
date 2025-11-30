@@ -17,6 +17,8 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@prisma/client": "^7.0.1",
     "@sentry/nextjs": "^10.27.0",
+    "@vercel/analytics": "^1.5.0",
+    "@vercel/speed-insights": "^1.2.0",
     "audiobuffer-to-wav": "^1.0.0",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
