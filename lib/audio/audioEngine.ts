@@ -143,6 +143,8 @@ export class AudioEngine {
   private haasMix: GainNode | null = null;
   private haasBypass: GainNode | null = null;
   private haasOutput: GainNode | null = null;
+  // Master fade gain (untuk kontrol manual fade in/out pada playback)
+  private masterFade: GainNode | null = null;
   private multibandFilters: Array<{
     lowpass: BiquadFilterNode;
     highpass: BiquadFilterNode;
@@ -603,7 +605,13 @@ export class AudioEngine {
     this.limiterMix!.connect(this.limiterOutput!);
     this.limiterBypass!.connect(this.limiterOutput!);
 
-    this.limiterOutput!.connect(this.gainNodes.output!);
+    // Sisipkan master fade node sebelum output gain
+    if (!this.masterFade) {
+      this.masterFade = this.audioContext!.createGain();
+      this.masterFade.gain.value = 1; // default tidak ada fade
+    }
+    this.limiterOutput!.connect(this.masterFade);
+    this.masterFade.connect(this.gainNodes.output!);
 
     // Connect to analyser and destination
     this.gainNodes.output!.connect(this.analyserNode!);
@@ -1368,7 +1376,7 @@ export class AudioEngine {
     const update = () => {
       if (!this.audioContext || !this.isPlaying) return;
 
-      this.currentTime = this.audioContext.currentTime - this.startTime + this.pausedTime;
+      this.currentTime = this.audioContext.currentTime - this.startTime;
 
       if (this.currentTime >= this.duration) {
         this.stop();
@@ -2623,39 +2631,6 @@ export class AudioEngine {
       const outputGain = offlineContext.createGain();
       outputGain.gain.value = this.dbToGain(settings.outputGain);
 
-      // Fade in/out gain node (3 detik fade in, 3 detik fade out)
-      const fadeGain = offlineContext.createGain();
-      const fadeDuration = 3.0; // 3 detik
-      const audioDuration = length / sampleRate; // Durasi audio dalam detik
-
-      // Fade in: 0 -> 1 dalam 3 detik pertama
-      fadeGain.gain.setValueAtTime(0, 0);
-
-      if (audioDuration > fadeDuration * 2) {
-        // Audio lebih panjang dari 6 detik: fade in 3s, steady, fade out 3s
-        fadeGain.gain.linearRampToValueAtTime(1, fadeDuration);
-        const fadeOutStart = audioDuration - fadeDuration;
-        fadeGain.gain.setValueAtTime(1, fadeOutStart);
-        fadeGain.gain.linearRampToValueAtTime(0, audioDuration);
-      } else if (audioDuration > fadeDuration) {
-        // Audio antara 3-6 detik: fade in 3s, lalu langsung fade out
-        fadeGain.gain.linearRampToValueAtTime(1, fadeDuration);
-        const fadeOutStart = audioDuration - fadeDuration;
-        // Pastikan fade out tidak overlap dengan fade in
-        if (fadeOutStart > fadeDuration) {
-          fadeGain.gain.setValueAtTime(1, fadeOutStart);
-          fadeGain.gain.linearRampToValueAtTime(0, audioDuration);
-        } else {
-          // Jika overlap, fade out dimulai setelah fade in selesai
-          fadeGain.gain.setValueAtTime(1, fadeDuration);
-          fadeGain.gain.linearRampToValueAtTime(0, audioDuration);
-        }
-      } else {
-        // Audio lebih pendek dari 3 detik: fade in setengah, fade out setengah
-        const halfDuration = audioDuration / 2;
-        fadeGain.gain.linearRampToValueAtTime(1, halfDuration);
-        fadeGain.gain.linearRampToValueAtTime(0, audioDuration);
-      }
 
       // Connect chain
       source.connect(inputGain);
@@ -2858,8 +2833,7 @@ export class AudioEngine {
       limiterMix.connect(limiterOutput);
       limiterBypass.connect(limiterOutput);
 
-      limiterOutput.connect(fadeGain);
-      fadeGain.connect(outputGain);
+      limiterOutput.connect(outputGain);
       outputGain.connect(offlineContext.destination);
 
       // Render
@@ -3258,6 +3232,29 @@ export class AudioEngine {
     }
 
     return { integrated: Math.max(-70, Math.min(0, integrated)), truePeak: Math.max(-60, Math.min(10, truePeakDb)) };
+  }
+
+  /**
+   * Melakukan fade in pada playback dengan durasi tertentu (ms)
+   */
+  fadeIn(durationMs: number): void {
+    if (!this.audioContext || !this.masterFade) return;
+    const now = this.audioContext.currentTime;
+    const dur = Math.max(0, durationMs) / 1000;
+    this.masterFade.gain.setValueAtTime(0, now);
+    this.masterFade.gain.linearRampToValueAtTime(1, now + dur);
+  }
+
+  /**
+   * Melakukan fade out pada playback dengan durasi tertentu (ms)
+   */
+  fadeOut(durationMs: number): void {
+    if (!this.audioContext || !this.masterFade) return;
+    const now = this.audioContext.currentTime;
+    const dur = Math.max(0, durationMs) / 1000;
+    const current = this.masterFade.gain.value;
+    this.masterFade.gain.setValueAtTime(current, now);
+    this.masterFade.gain.linearRampToValueAtTime(0, now + dur);
   }
 
   destroy(): void {

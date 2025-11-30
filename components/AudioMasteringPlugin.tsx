@@ -70,6 +70,8 @@ export function AudioMasteringPlugin() {
   const DISCLAIMER_ACCEPT_LABEL = process.env.NEXT_PUBLIC_DISCLAIMER_ACCEPT_LABEL || 'Saya Mengerti';
   const DISCLAIMER_CLOSE_LABEL = process.env.NEXT_PUBLIC_DISCLAIMER_CLOSE_LABEL || 'Tutup';
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const DEFAULT_FADE_MS = Number(process.env.NEXT_PUBLIC_FADE_DURATION_MS || 3000);
+  const [fadeDurationMs, setFadeDurationMs] = useState<number>(DEFAULT_FADE_MS);
   const {
     isInitialized,
     isLoading,
@@ -90,6 +92,8 @@ export function AudioMasteringPlugin() {
     resumeContext,
     getStereoWaveformData,
     measureOfflineLoudness,
+    fadeIn,
+    fadeOut,
   } = useAudioEngine();
 
   const { savePreset, presets: dbPresets, isLoading: presetsLoading, loadPreset } = usePresets();
@@ -344,13 +348,26 @@ export function AudioMasteringPlugin() {
     await processAudioFile(file);
   };
 
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => {
     if (isPlaying) {
       pause();
     } else {
       play();
     }
-  };
+  }, [isPlaying, pause, play]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      e.preventDefault();
+      if (!audioFile || isLoading) return;
+      handlePlayPause();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [audioFile, isLoading, handlePlayPause]);
 
   const handleStop = () => {
     stop();
@@ -765,17 +782,44 @@ export function AudioMasteringPlugin() {
                 aria-label={isPlaying ? 'Pause' : 'Play'}
                 className="bg-cyan-600 hover:bg-cyan-500 text-white p-1.5 rounded transition-colors disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed"
                 disabled={!audioFile || isLoading}
+                title={isPlaying ? 'Pause (Spasi)' : 'Play (Spasi)'}
               >
                 {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
               </button>
-              <button 
-                onClick={handleStop}
-                aria-label="Stop"
-                className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!audioFile || isLoading}
-              >
-                <SkipForward className="w-3 h-3" />
-              </button>
+                <button 
+                  onClick={handleStop}
+                  aria-label="Stop"
+                  className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!audioFile || isLoading}
+                >
+                  <SkipForward className="w-3 h-3" />
+                </button>
+                <div className="flex items-center gap-2 ml-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={10000}
+                    step={100}
+                    value={fadeDurationMs}
+                    onChange={(e) => setFadeDurationMs(Number(e.target.value))}
+                    className="w-20 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs"
+                  />
+                  <span className="text-zinc-500 text-xs">ms</span>
+                  <button
+                    onClick={() => fadeIn(fadeDurationMs)}
+                    className="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded text-xs border border-emerald-600"
+                    disabled={!audioFile || isLoading}
+                  >
+                    Fade In
+                  </button>
+                  <button
+                    onClick={() => fadeOut(fadeDurationMs)}
+                    className="bg-red-700 hover:bg-red-600 text-white px-2 py-1 rounded text-xs border border-red-600"
+                    disabled={!audioFile || isLoading}
+                  >
+                    Fade Out
+                  </button>
+                </div>
               </div>
             </div>
             <Waveform 

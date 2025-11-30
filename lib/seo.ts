@@ -22,6 +22,6 @@ export const seoConfig: SEOConfig = {
   bannerText: process.env.NEXT_PUBLIC_APP_BANNER || "Beta",
   ogImageUrl:
     process.env.NEXT_PUBLIC_OG_IMAGE_URL ||
-    `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/og-image.png`,
+    `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/og-image.jpeg`,
   themeColor: process.env.NEXT_PUBLIC_THEME_COLOR || "#0f172a",
 };

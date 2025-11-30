@@ -22,6 +22,8 @@ export interface UseAudioEngineReturn {
   setupAudioChain: (settings: AudioEngineSettings) => void;
   exportAudio: (settings: AudioEngineSettings, format?: 'wav' | 'mp3') => Promise<Blob>;
   resumeContext: () => Promise<void>;
+  fadeIn: (durationMs: number) => void;
+  fadeOut: (durationMs: number) => void;
   getWaveformData: (width?: number) => Float32Array | null;
   getStereoWaveformData: (width?: number) => { left: Float32Array; right: Float32Array } | null;
   measureOfflineLoudness: (settings: AudioEngineSettings) => Promise<{ integrated: number; truePeak: number }>;
@@ -223,6 +225,16 @@ export function useAudioEngine(): UseAudioEngineReturn {
     }
   }, [engine]);
 
+  const fadeIn = useCallback((durationMs: number) => {
+    if (!engine) return;
+    engine.fadeIn(durationMs);
+  }, [engine]);
+
+  const fadeOut = useCallback((durationMs: number) => {
+    if (!engine) return;
+    engine.fadeOut(durationMs);
+  }, [engine]);
+
   // Update context state periodically
   useEffect(() => {
     if (!engine) return;
@@ -279,6 +291,8 @@ export function useAudioEngine(): UseAudioEngineReturn {
     setupAudioChain,
     exportAudio,
     resumeContext,
+    fadeIn,
+    fadeOut,
     getWaveformData,
     getStereoWaveformData,
     measureOfflineLoudness,
