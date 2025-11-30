@@ -693,7 +693,6 @@ export function AudioMasteringPlugin() {
               className="hidden"
               disabled={!isInitialized || isLoading}
               aria-label="Choose audio file"
-              capture="user"
             />
           </label>
 
