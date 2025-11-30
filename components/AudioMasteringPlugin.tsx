@@ -688,11 +688,12 @@ export function AudioMasteringPlugin() {
             <span className="text-sm">Upload</span>
             <input
               type="file"
-              accept="audio/*,audio/mpeg,audio/wav,audio/flac,audio/ogg,audio/aac,audio/mp4"
+              accept="audio/*,.mp3,.wav,.flac,.ogg,.aac,.m4a,.mp4"
               onChange={handleFileUpload}
               className="hidden"
               disabled={!isInitialized || isLoading}
               aria-label="Choose audio file"
+              multiple={false}
             />
           </label>
 
