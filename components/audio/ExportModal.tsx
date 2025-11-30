@@ -66,17 +66,21 @@ export function ExportModal({ isOpen, onClose, onExport }: ExportModalProps) {
                 </button>
                 <button 
                   onClick={() => setSelectedFormat('mp3')}
-                  disabled
-                  className="px-4 py-2 rounded-lg bg-zinc-700 text-zinc-500 cursor-not-allowed opacity-50"
-                  title="MP3 export coming soon"
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    selectedFormat === 'mp3'
+                      ? 'bg-cyan-600 text-white'
+                      : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-100'
+                  }`}
                 >
                   MP3
                 </button>
                 <button 
                   onClick={() => setSelectedFormat('flac')}
-                  disabled
-                  className="px-4 py-2 rounded-lg bg-zinc-700 text-zinc-500 cursor-not-allowed opacity-50"
-                  title="FLAC export coming soon"
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    selectedFormat === 'flac'
+                      ? 'bg-cyan-600 text-white'
+                      : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-100'
+                  }`}
                 >
                   FLAC
                 </button>
@@ -87,30 +91,55 @@ export function ExportModal({ isOpen, onClose, onExport }: ExportModalProps) {
             <div>
               <label className="text-zinc-400 text-sm block mb-2">Quality</label>
               <div className="space-y-2">
-                <button 
-                  onClick={() => {
-                    handleExport(selectedFormat, '16bit');
-                  }}
-                  className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
-                >
-                  16-bit / 44.1kHz (CD Quality)
-                </button>
-                <button 
-                  onClick={() => {
-                    handleExport(selectedFormat, '24bit');
-                  }}
-                  className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
-                >
-                  24-bit / 48kHz (Studio Quality)
-                </button>
-                <button 
-                  onClick={() => {
-                    handleExport(selectedFormat, '32bit');
-                  }}
-                  className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
-                >
-                  32-bit / 96kHz (High-Res)
-                </button>
+                {selectedFormat === 'mp3' ? (
+                  // MP3: Only 320 kbps
+                  <button 
+                    onClick={() => {
+                      handleExport(selectedFormat, '320k');
+                    }}
+                    className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
+                  >
+                    320 kbps (High Quality)
+                  </button>
+                ) : selectedFormat === 'flac' ? (
+                  // FLAC: Only lossless
+                  <button 
+                    onClick={() => {
+                      handleExport(selectedFormat, 'lossless');
+                    }}
+                    className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
+                  >
+                    Lossless (Uncompressed)
+                  </button>
+                ) : (
+                  // WAV: Multiple quality options
+                  <>
+                    <button 
+                      onClick={() => {
+                        handleExport(selectedFormat, '16bit');
+                      }}
+                      className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
+                    >
+                      16-bit / 44.1kHz (CD Quality)
+                    </button>
+                    <button 
+                      onClick={() => {
+                        handleExport(selectedFormat, '24bit');
+                      }}
+                      className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
+                    >
+                      24-bit / 48kHz (Studio Quality)
+                    </button>
+                    <button 
+                      onClick={() => {
+                        handleExport(selectedFormat, '32bit');
+                      }}
+                      className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
+                    >
+                      32-bit / 96kHz (High-Res)
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 

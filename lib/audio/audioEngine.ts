@@ -54,6 +54,8 @@ export interface AudioEngineSettings {
       active: boolean;
     }>;
   };
+  exportFadeInMs?: number;
+  exportFadeOutMs?: number;
 }
 
 export interface AudioAnalysisData {
@@ -260,28 +262,152 @@ export class AudioEngine {
     this.analyserNode.smoothingTimeConstant = isMobile ? 0.7 : isTablet ? 0.8 : 0.8;
   }
 
+  /**
+   * Muat file audio baru dengan hard reset:
+   * - Hentikan semua source
+   * - Tutup dan buat AudioContext baru
+   * - Decode dari FileReader (fresh ArrayBuffer)
+   */
   async loadAudioFile(file: File): Promise<void> {
-    if (!this.audioContext) {
-      await this.initialize();
-    }
-
-    if (!this.audioContext) {
-      throw new Error('Audio context not initialized');
-    }
-
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-      this.duration = this.audioBuffer.duration;
+      // Pastikan playback berhenti dan graph dibersihkan
+      this.stop();
+      this.cleanup();
+
+      // Tutup AudioContext lama jika ada
+      if (this.audioContext) {
+        try {
+          await this.audioContext.close();
+        } catch {
+          // Abaikan error penutupan context
+        }
+        this.audioContext = null;
+      }
+
+      // Reset semua node agar tidak ada referensi cross-context
+      this.resetAllNodes();
+
+      // Buat AudioContext baru dan analyser
+      await this.initialize();
+      if (!this.audioContext) {
+        throw new Error('Audio context not initialized');
+      }
+
+      // Baca file via FileReader agar buffer benar-benar fresh
+      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          if (result instanceof ArrayBuffer) {
+            resolve(result);
+          } else {
+            reject(new Error('Invalid file data'));
+          }
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsArrayBuffer(file);
+      });
+
+      // Decode audio
+      const audioContext = this.audioContext as AudioContext;
+      const buffer = await audioContext.decodeAudioData(arrayBuffer);
+      this.audioBuffer = buffer;
+      this.duration = buffer.duration;
+
+      // Reset state playback
       this.pausedTime = 0;
       this.currentTime = 0;
+      this.startTime = 0;
+      this.sourceNode = null;
+      this.sourceNodeStarted = false;
 
-      // Reset graph built flag untuk rebuild graph dengan file baru
+      // Paksa rebuild graph untuk file baru
       this.audioGraphBuilt = false;
+
+      // Pastikan master fade tidak mute pada context baru
+      this.masterFade = null;
     } catch (error) {
       console.error('Failed to load audio file:', error);
       throw new Error('Failed to load audio file. The file may be corrupted or in an unsupported format.');
     }
+  }
+
+  /**
+   * Reset semua AudioNode instance ke null agar aman saat membuat AudioContext baru
+   */
+  private resetAllNodes(): void {
+    this.analyserNode = null;
+    this.gainNodes = { input: null, output: null };
+    this.compressorNode = null;
+    this.compressorGainNode = null;
+    this.compressorMix = null;
+    this.compressorBypass = null;
+    this.compressorOutput = null;
+    this.convolverNode = null;
+    this.reverbGainNode = null;
+    this.dryGainNode = null;
+    this.reverbDelayNode = null;
+    this.reverbFeedbackGain = null;
+    this.reverbDampingFilter = null;
+    this.reverbMix = null;
+    this.reverbBypass = null;
+    this.reverbOutput = null;
+    this.saturationNode = null;
+    this.saturationDryGain = null;
+    this.saturationWetGain = null;
+    this.saturationDCBlocker = null;
+    this.saturationPreEmphasis = null;
+    this.saturationDeEmphasis = null;
+    this.saturationPreGain = null;
+    this.saturationPostHPF = null;
+    this.saturationPostHighShelf = null;
+    this.saturationPostLPF = null;
+    this.saturationCeilGain = null;
+    this.saturationMix = null;
+    this.saturationBypass = null;
+    this.saturationOutput = null;
+    this.harmonizerDelay1 = null;
+    this.harmonizerDelay2 = null;
+    this.harmonizerLFO1 = null;
+    this.harmonizerLFO2 = null;
+    this.harmonizerLFOGain1 = null;
+    this.harmonizerLFOGain2 = null;
+    this.harmonizerDryGain = null;
+    this.harmonizerWetGain = null;
+    this.harmonizerToneFilter = null;
+    this.harmonizerMix = null;
+    this.harmonizerBypass = null;
+    this.harmonizerOutput = null;
+    this.splitterNode = null;
+    this.mergerNode = null;
+    this.stereoMidGain = null;
+    this.stereoSideGain = null;
+    this.stereoLeftDirect = null;
+    this.stereoRightDirect = null;
+    this.stereoLeftCrossfeed = null;
+    this.stereoRightCrossfeed = null;
+    this.stereoOutput = null;
+    this.haasSplitter = null;
+    this.haasMerger = null;
+    this.haasLeftDelay = null;
+    this.haasRightDelay = null;
+    this.haasLeftDry = null;
+    this.haasRightDry = null;
+    this.haasLeftWet = null;
+    this.haasRightWet = null;
+    this.haasMix = null;
+    this.haasBypass = null;
+    this.haasOutput = null;
+    this.limiterNode = null;
+    this.limiterMix = null;
+    this.limiterBypass = null;
+    this.limiterOutput = null;
+    this.multibandFilters = [];
+    this.multibandMerger = null;
+    this.multibandBypass = null;
+    this.multibandOutput = null;
+    this.multibandMix = null;
+    this.masterFade = null;
   }
 
   // Build audio graph sekali saja (dipanggil saat file loaded)
@@ -605,13 +731,8 @@ export class AudioEngine {
     this.limiterMix!.connect(this.limiterOutput!);
     this.limiterBypass!.connect(this.limiterOutput!);
 
-    // Sisipkan master fade node sebelum output gain
-    if (!this.masterFade) {
-      this.masterFade = this.audioContext!.createGain();
-      this.masterFade.gain.value = 1; // default tidak ada fade
-    }
-    this.limiterOutput!.connect(this.masterFade);
-    this.masterFade.connect(this.gainNodes.output!);
+    // Langsung connect limiter output ke output gain (fade hanya untuk export)
+    this.limiterOutput!.connect(this.gainNodes.output!);
 
     // Connect to analyser and destination
     this.gainNodes.output!.connect(this.analyserNode!);
@@ -1137,12 +1258,18 @@ export class AudioEngine {
       this.audioGraphBuilt = true;
     }
 
+    // Pastikan master fade tidak pada posisi mute
+    if (this.masterFade) {
+      const now = this.audioContext.currentTime;
+      this.masterFade.gain.setValueAtTime(1, now);
+    }
+
     // Stop dan cleanup source node yang ada (jika ada)
     // PASTIKAN benar-benar di-stop sebelum membuat yang baru
     if (this.sourceNode) {
       // Remove onended handler untuk mencegah callback yang tidak diinginkan
       this.sourceNode.onended = null;
-      
+
       if (this.sourceNodeStarted) {
         try {
           this.sourceNode.stop();
@@ -1150,13 +1277,13 @@ export class AudioEngine {
           // Ignore
         }
       }
-      
+
       try {
         this.sourceNode.disconnect();
       } catch {
         // Node mungkin sudah ter-disconnect, ignore
       }
-      
+
       // Clear reference
       this.sourceNode = null;
       this.sourceNodeStarted = false;
@@ -1245,11 +1372,11 @@ export class AudioEngine {
       }
       this.sourceNodeStarted = false;
     }
-    
+
     // Jangan disconnect atau clear source node saat pause
     // Biarkan tetap terhubung untuk bisa resume nanti
     // Tapi kita tidak akan menggunakan source node yang sama, akan buat baru saat play()
-    
+
     this.pausedTime = this.currentTime;
     this.isPlaying = false;
     this.stopTimeUpdate();
@@ -1283,13 +1410,13 @@ export class AudioEngine {
 
     const wasPlaying = this.isPlaying;
     const seekTime = Math.max(0, Math.min(time, this.duration));
-    
+
     // Stop dan cleanup source node yang sedang playing (jika ada)
     // PASTIKAN benar-benar di-stop sebelum membuat yang baru
     if (this.sourceNode) {
       // Remove onended handler untuk mencegah callback yang tidak diinginkan
       this.sourceNode.onended = null;
-      
+
       if (this.sourceNodeStarted) {
         try {
           this.sourceNode.stop();
@@ -1297,13 +1424,13 @@ export class AudioEngine {
           // Source node mungkin sudah berakhir, ignore
         }
       }
-      
+
       try {
         this.sourceNode.disconnect();
       } catch {
         // Node mungkin sudah ter-disconnect, ignore
       }
-      
+
       // Clear reference
       this.sourceNode = null;
       this.sourceNodeStarted = false;
@@ -1359,7 +1486,7 @@ export class AudioEngine {
       // Start time update tracking (ini akan trigger onTimeUpdate secara berkala)
       this.startTimeUpdate();
       this.startGainReductionTracking();
-      
+
       // Update time callback segera setelah seek (untuk UI update)
       if (this.onTimeUpdate) {
         this.onTimeUpdate(seekTime);
@@ -1437,7 +1564,7 @@ export class AudioEngine {
 
     const numberOfChannels = this.audioBuffer.numberOfChannels;
     const leftChannelData = this.audioBuffer.getChannelData(0);
-    
+
     // Untuk stereo: ambil channel 1, untuk mono: copy channel 0 (bukan reference yang sama)
     let rightChannelData: Float32Array;
     if (numberOfChannels > 1) {
@@ -2424,7 +2551,11 @@ export class AudioEngine {
     });
   }
 
-  async exportAudio(settings: AudioEngineSettings, format: 'wav' | 'mp3' = 'wav'): Promise<Blob> {
+  /**
+   * Ekspor audio dalam format WAV, MP3 (320kbps), atau FLAC.
+   * Untuk MP3/FLAC, proses: render buffer -> tulis WAV in-memory -> transcode via ffmpeg.wasm.
+   */
+  async exportAudio(settings: AudioEngineSettings, format: 'wav' | 'mp3' | 'flac' = 'wav'): Promise<Blob> {
     if (!this.audioBuffer) {
       throw new Error('No audio loaded');
     }
@@ -2833,7 +2964,28 @@ export class AudioEngine {
       limiterMix.connect(limiterOutput);
       limiterBypass.connect(limiterOutput);
 
-      limiterOutput.connect(outputGain);
+      // Apply export-only fade in/out
+      const fadeGain = offlineContext.createGain();
+      const totalSec = length / sampleRate;
+      const fadeInSec = Math.max(0, (settings.exportFadeInMs || 0) / 1000);
+      const fadeOutSec = Math.max(0, (settings.exportFadeOutMs || 0) / 1000);
+
+      // Default to full volume
+      fadeGain.gain.setValueAtTime(1, 0);
+      // Fade in from 0 to 1
+      if (fadeInSec > 0) {
+        fadeGain.gain.setValueAtTime(0, 0);
+        fadeGain.gain.linearRampToValueAtTime(1, fadeInSec);
+      }
+      // Fade out from 1 to 0 at end
+      if (fadeOutSec > 0) {
+        const startOut = Math.max(0, totalSec - fadeOutSec);
+        fadeGain.gain.setValueAtTime(1, startOut);
+        fadeGain.gain.linearRampToValueAtTime(0, totalSec);
+      }
+
+      limiterOutput.connect(fadeGain);
+      fadeGain.connect(outputGain);
       outputGain.connect(offlineContext.destination);
 
       // Render
@@ -2844,8 +2996,8 @@ export class AudioEngine {
         throw new Error('Failed to render audio buffer');
       }
 
-      // Convert to WAV
-      if (format === 'wav') {
+      // Convert to WAV (juga digunakan sebagai input transcode untuk MP3/FLAC)
+      {
         try {
           // audiobuffer-to-wav uses CommonJS default export
           const audioBufferToWavModule = await import('audiobuffer-to-wav');
@@ -2859,15 +3011,62 @@ export class AudioEngine {
           if (!wav || (wav instanceof ArrayBuffer && wav.byteLength === 0)) {
             throw new Error('WAV conversion produced empty buffer');
           }
-          return new Blob([wav], { type: 'audio/wav' });
+          // Jika format target WAV, langsung return
+          if (format === 'wav') {
+            return new Blob([wav], { type: 'audio/wav' });
+          }
+
+          // Untuk MP3/FLAC, transcode dengan ffmpeg.wasm
+          try {
+            console.log('[Export] Attempting to load FFmpeg...');
+            const { getFFmpegInstance, fetchFile } = await import('./ffmpegLoader');
+            const ffmpeg = await getFFmpegInstance();
+
+            console.log('[Export] FFmpeg loaded successfully');
+
+            // Tulis input WAV ke FS
+            const inputName = 'input.wav';
+            const inputData = await fetchFile(new Blob([wav], { type: 'audio/wav' }));
+            await ffmpeg.writeFile(inputName, inputData);
+
+            if (format === 'mp3') {
+              // MP3 320kbps CBR
+              const outputName = 'output.mp3';
+              console.log('[Export] Converting to MP3...');
+              await ffmpeg.exec(['-i', inputName, '-b:a', '320k', '-codec:a', 'libmp3lame', outputName]);
+              const data = await ffmpeg.readFile(outputName);
+              // Buat salinan baru untuk memastikan kompatibilitas dengan Blob
+              console.log('[Export] MP3 conversion complete');
+              return new Blob([new Uint8Array(data)], { type: 'audio/mpeg' });
+            }
+
+            if (format === 'flac') {
+              // FLAC lossless
+              const outputName = 'output.flac';
+              console.log('[Export] Converting to FLAC...');
+              await ffmpeg.exec(['-i', inputName, '-c:a', 'flac', outputName]);
+              const data = await ffmpeg.readFile(outputName);
+              // Buat salinan baru untuk memastikan kompatibilitas dengan Blob
+              console.log('[Export] FLAC conversion complete');
+              return new Blob([new Uint8Array(data)], { type: 'audio/flac' });
+            }
+          } catch (ffmpegErr: unknown) {
+            console.error('[Export] FFmpeg conversion failed:', ffmpegErr);
+            // Fallback ke WAV jika FFmpeg gagal
+            console.warn(`[Export] Falling back to WAV format due to FFmpeg error`);
+            throw new Error(
+              `Cannot export as ${format.toUpperCase()} - FFmpeg not available. ` +
+              `Please download as WAV instead. ` +
+              `Error: ${ffmpegErr instanceof Error ? ffmpegErr.message : 'Unknown error'}`
+            );
+          }
         } catch (err: unknown) {
           console.error('WAV conversion error:', err);
           throw new Error(`Failed to convert to WAV: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
       }
-
-      // For MP3, would need additional library
-      throw new Error('MP3 export not yet implemented');
+      // If code reaches here, format is not supported
+      throw new Error('Unsupported export format');
     } catch (err: unknown) {
       console.error('Export audio error:', err);
       throw err;
@@ -3232,6 +3431,150 @@ export class AudioEngine {
     }
 
     return { integrated: Math.max(-70, Math.min(0, integrated)), truePeak: Math.max(-60, Math.min(10, truePeakDb)) };
+  }
+
+  /**
+   * Cache untuk FFmpeg loader agar tidak perlu load ulang
+   */
+  private ffmpegLoaderCache: {
+    createFFmpegFn: (opts: { log: boolean; corePath?: string }) => {
+      load: () => Promise<void>;
+      FS: (op: string, path: string, data?: Uint8Array) => unknown;
+      run: (...args: string[]) => Promise<void>;
+    };
+    fetchFileFn: (input: Blob | File | string) => Promise<Uint8Array> | Uint8Array;
+  } | null = null;
+
+  /**
+   * Loader FFmpeg yang robust: gunakan UMD di browser untuk kompatibilitas maksimal
+   */
+  private async getFFmpegLoader(): Promise<{
+    createFFmpegFn: (opts: { log: boolean; corePath?: string }) => {
+      load: () => Promise<void>;
+      FS: (op: string, path: string, data?: Uint8Array) => unknown;
+      run: (...args: string[]) => Promise<void>;
+    };
+    fetchFileFn: (input: Blob | File | string) => Promise<Uint8Array> | Uint8Array;
+  }> {
+    // Return cached instance if available
+    if (this.ffmpegLoaderCache) {
+      console.log('[FFmpeg] Using cached loader');
+      return this.ffmpegLoaderCache;
+    }
+
+    type FF = {
+      createFFmpeg?: (opts: { log: boolean; corePath?: string }) => {
+        load: () => Promise<void>;
+        FS: (op: string, path: string, data?: Uint8Array) => unknown;
+        run: (...args: string[]) => Promise<void>;
+      };
+      fetchFile?: (input: Blob | File | string) => Promise<Uint8Array> | Uint8Array;
+      default?: FF;
+    };
+
+    // Di browser, langsung gunakan UMD untuk kompatibilitas maksimal
+    if (typeof window !== 'undefined') {
+      console.log('[FFmpeg] Browser detected, using UMD approach');
+
+      // Cek apakah sudah ada di global
+      const g = globalThis as any;
+
+      // Coba berbagai kemungkinan lokasi global FFmpeg
+      const checkGlobal = () => {
+        return g.FFmpeg || g.window?.FFmpeg || (window as any).FFmpeg;
+      };
+
+      let ffmpegGlobal = checkGlobal();
+      if (ffmpegGlobal?.createFFmpeg && ffmpegGlobal?.fetchFile) {
+        console.log('[FFmpeg] Found existing global FFmpeg');
+        this.ffmpegLoaderCache = {
+          createFFmpegFn: ffmpegGlobal.createFFmpeg,
+          fetchFileFn: ffmpegGlobal.fetchFile
+        };
+        return this.ffmpegLoaderCache;
+      }
+
+      // Load UMD script
+      const umdUrl = (process.env.NEXT_PUBLIC_FFMPEG_UMD_URL || '').trim() || 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js';
+      console.log('[FFmpeg] Loading UMD from:', umdUrl);
+
+      try {
+        await this.loadScript(umdUrl);
+        console.log('[FFmpeg] UMD script loaded successfully');
+
+        // Tunggu sebentar untuk memastikan script selesai inisialisasi
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Check global again dengan berbagai kemungkinan
+        ffmpegGlobal = checkGlobal();
+
+        console.log('[FFmpeg] Global state after load:', {
+          hasFFmpeg: !!ffmpegGlobal,
+          hasCreateFFmpeg: !!ffmpegGlobal?.createFFmpeg,
+          hasFetchFile: !!ffmpegGlobal?.fetchFile,
+          globalKeys: ffmpegGlobal ? Object.keys(ffmpegGlobal) : [],
+          windowKeys: Object.keys(window).filter(k => k.toLowerCase().includes('ffmpeg'))
+        });
+
+        const createFFmpegFn = ffmpegGlobal?.createFFmpeg;
+        const fetchFileFn = ffmpegGlobal?.fetchFile;
+
+        if (!createFFmpegFn || !fetchFileFn) {
+          // Coba alternatif: mungkin fungsi langsung di window
+          const altCreate = (window as any).createFFmpeg;
+          const altFetch = (window as any).fetchFile;
+
+          if (altCreate && altFetch) {
+            console.log('[FFmpeg] Found functions directly on window');
+            this.ffmpegLoaderCache = {
+              createFFmpegFn: altCreate,
+              fetchFileFn: altFetch
+            };
+            return this.ffmpegLoaderCache;
+          }
+
+          throw new Error('FFmpeg UMD loaded but functions not found in global scope');
+        }
+
+        this.ffmpegLoaderCache = { createFFmpegFn, fetchFileFn };
+        console.log('[FFmpeg] UMD loader cached successfully');
+        return this.ffmpegLoaderCache;
+      } catch (err) {
+        console.error('[FFmpeg] UMD loading failed:', err);
+        throw new Error(`Failed to load FFmpeg: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+
+    // Server-side: try ESM import
+    console.log('[FFmpeg] Server-side detected, trying ESM import');
+    try {
+      const mod = (await import('@ffmpeg/ffmpeg')) as unknown as FF;
+      const createFFmpegFn = mod.createFFmpeg || mod.default?.createFFmpeg;
+      const fetchFileFn = mod.fetchFile || mod.default?.fetchFile;
+
+      if (createFFmpegFn && fetchFileFn) {
+        this.ffmpegLoaderCache = { createFFmpegFn, fetchFileFn };
+        return this.ffmpegLoaderCache;
+      }
+    } catch (err) {
+      console.error('[FFmpeg] ESM import failed:', err);
+    }
+
+    throw new Error('FFmpeg not available in this environment');
+  }
+
+  /**
+   * Memuat script eksternal ke halaman dan menunggu onload.
+   */
+  private async loadScript(src: string): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+      document.head.appendChild(s);
+    });
   }
 
   /**

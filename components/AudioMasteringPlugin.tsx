@@ -72,6 +72,8 @@ export function AudioMasteringPlugin() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const DEFAULT_FADE_MS = Number(process.env.NEXT_PUBLIC_FADE_DURATION_MS || 3000);
   const [fadeDurationMs, setFadeDurationMs] = useState<number>(DEFAULT_FADE_MS);
+  const [exportFadeInMs, setExportFadeInMs] = useState<number>(DEFAULT_FADE_MS);
+  const [exportFadeOutMs, setExportFadeOutMs] = useState<number>(DEFAULT_FADE_MS);
   const {
     isInitialized,
     isLoading,
@@ -92,8 +94,6 @@ export function AudioMasteringPlugin() {
     resumeContext,
     getStereoWaveformData,
     measureOfflineLoudness,
-    fadeIn,
-    fadeOut,
   } = useAudioEngine();
 
   const { savePreset, presets: dbPresets, isLoading: presetsLoading, loadPreset } = usePresets();
@@ -284,10 +284,19 @@ export function AudioMasteringPlugin() {
     }
 
     try {
+      // Pastikan playback sebelumnya berhenti sebelum memuat file baru
+      stop();
+
+      // Muat file baru ke engine
       await loadAudioFile(file);
+
+      // Set state file di UI
       setAudioFile(file);
       setAudioFileName(file.name);
-      stop();
+
+      // Rebuild audio chain untuk file baru segera
+      const settings = getCurrentSettings();
+      setupAudioChain(settings);
 
       setTimeout(() => {
         const stereoData = getStereoWaveformData(2000);
@@ -300,11 +309,11 @@ export function AudioMasteringPlugin() {
       setCompressorEnabled(false);
       setLimiterEnabled(false);
       setStereoEnabled(false);
-    setHarmonizerEnabled(false);
-    setReverbEnabled(false);
-    setSaturationEnabled(false);
-    setMultibandEnabled(false);
-    setHaasEnabled(false);
+      setHarmonizerEnabled(false);
+      setReverbEnabled(false);
+      setSaturationEnabled(false);
+      setMultibandEnabled(false);
+      setHaasEnabled(false);
   } catch (err) {
       console.error('Failed to load audio file:', err);
       Sentry.captureException(err, {
@@ -433,6 +442,18 @@ export function AudioMasteringPlugin() {
               gain: preset.settings.compressor.gain || 0,
             },
           }),
+          ...(preset.settings.limiter && {
+            limiter: {
+              enabled: preset.settings.limiter.enabled,
+              threshold: preset.settings.limiter.threshold,
+            },
+          }),
+          ...(preset.settings.stereoWidth && {
+            stereoWidth: {
+              enabled: preset.settings.stereoWidth.enabled,
+              width: preset.settings.stereoWidth.width,
+            },
+          }),
         };
         applyPresetSettings(convertedSettings);
       }
@@ -527,9 +548,10 @@ export function AudioMasteringPlugin() {
       }
 
       const settings = getCurrentSettings();
-      console.log('Exporting with settings:', settings);
+      const exportSettings = { ...settings, exportFadeInMs, exportFadeOutMs };
+      console.log('Exporting with settings:', exportSettings);
       
-      const blob = await exportAudio(settings, format as 'wav' | 'mp3');
+      const blob = await exportAudio(exportSettings, format as 'wav' | 'mp3' | 'flac');
       
       if (!blob || blob.size === 0) {
         throw new Error('Exported blob is empty');
@@ -546,7 +568,8 @@ export function AudioMasteringPlugin() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      showToast(`Export successful! Audio exported as ${format.toUpperCase()} with ${quality} quality.`, 'success');
+      const qualityLabel = format === 'mp3' ? '320 kbps' : format === 'flac' ? 'lossless' : quality;
+      showToast(`Export successful! Audio exported as ${format.toUpperCase()}${qualityLabel ? ` (${qualityLabel})` : ''}.`, 'success');
     } catch (err) {
       console.error('Export failed:', err);
       Sentry.captureException(err, {
@@ -805,20 +828,20 @@ export function AudioMasteringPlugin() {
                     className="w-20 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs"
                   />
                   <span className="text-zinc-500 text-xs">ms</span>
-                  <button
-                    onClick={() => fadeIn(fadeDurationMs)}
-                    className="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded text-xs border border-emerald-600"
-                    disabled={!audioFile || isLoading}
-                  >
-                    Fade In
-                  </button>
-                  <button
-                    onClick={() => fadeOut(fadeDurationMs)}
-                    className="bg-red-700 hover:bg-red-600 text-white px-2 py-1 rounded text-xs border border-red-600"
-                    disabled={!audioFile || isLoading}
-                  >
-                    Fade Out
-                  </button>
+            <button
+              onClick={() => { setExportFadeInMs(fadeDurationMs); showToast(`Fade In export: ${fadeDurationMs} ms`, 'info'); }}
+              className="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded text-xs border border-emerald-600"
+              disabled={!audioFile || isLoading}
+            >
+              Fade In
+            </button>
+            <button
+              onClick={() => { setExportFadeOutMs(fadeDurationMs); showToast(`Fade Out export: ${fadeDurationMs} ms`, 'info'); }}
+              className="bg-red-700 hover:bg-red-600 text-white px-2 py-1 rounded text-xs border border-red-600"
+              disabled={!audioFile || isLoading}
+            >
+              Fade Out
+            </button>
                 </div>
               </div>
             </div>

@@ -12,13 +12,24 @@ export interface EffectPreset {
       release: number;
       gain?: number;
     };
+    limiter?: {
+      enabled: boolean;
+      threshold: number;
+    };
+    stereoWidth?: {
+      enabled: boolean;
+      width: number;
+    };
   };
 }
 
 export const effectPresets: Record<string, EffectPreset> = {
   default: {
     name: 'Default',
-    settings: {},
+    settings: {
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 100 },
+    },
   },
   mastering: {
     name: 'Mastering',
@@ -29,6 +40,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 5,
         release: 80,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 110 },
     },
   },
   loud: {
@@ -40,11 +53,15 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 3,
         release: 50,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 110 },
     },
   },
   warm: {
     name: 'Warm',
     settings: {
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 105 },
     },
   },
   bright: {
@@ -56,11 +73,16 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 8,
         release: 120,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 115 },
     },
   },
   vintage: {
     name: 'Vintage',
-    settings: {},
+    settings: {
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 100 },
+    },
   },
   punchy: {
     name: 'Punchy',
@@ -72,6 +94,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         release: 60,
         gain: 2,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 110 },
     },
   },
   smooth: {
@@ -83,6 +107,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 15,
         release: 150,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 100 },
     },
   },
   aggressive: {
@@ -95,6 +121,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         release: 40,
         gain: 3,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 115 },
     },
   },
   clean: {
@@ -106,6 +134,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 10,
         release: 100,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 100 },
     },
   },
   deep: {
@@ -117,6 +147,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 5,
         release: 90,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 110 },
     },
   },
   crisp: {
@@ -128,6 +160,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 6,
         release: 110,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 115 },
     },
   },
   wide: {
@@ -139,6 +173,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 8,
         release: 120,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 150 },
     },
   },
   intimate: {
@@ -150,6 +186,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 12,
         release: 130,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 90 },
     },
   },
   epic: {
@@ -162,6 +200,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         release: 70,
         gain: 2.5,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 130 },
     },
   },
   modern: {
@@ -174,6 +214,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         release: 85,
         gain: 1.5,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 110 },
     },
   },
   rock: {
@@ -186,6 +228,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         release: 55,
         gain: 2,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 115 },
     },
   },
   electronic: {
@@ -198,6 +242,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         release: 45,
         gain: 3,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 120 },
     },
   },
   acoustic: {
@@ -209,6 +255,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         attack: 9,
         release: 115,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 105 },
     },
   },
   cinematic: {
@@ -221,6 +269,8 @@ export const effectPresets: Record<string, EffectPreset> = {
         release: 80,
         gain: 2,
       },
+      limiter: { enabled: true, threshold: -0.3 },
+      stereoWidth: { enabled: true, width: 130 },
     },
   },
 };

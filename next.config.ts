@@ -13,6 +13,18 @@ const nextConfig: NextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
+  webpack: (config, { isServer }) => {
+    // Handle @ffmpeg/ffmpeg - should only be loaded on client side
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+      };
+    }
+    return config;
+  },
 };
 
 export default withSentryConfig(nextConfig, {

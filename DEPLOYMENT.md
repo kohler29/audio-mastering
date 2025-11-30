@@ -49,8 +49,8 @@ Sebelum deploy, pastikan Anda sudah menyiapkan environment variables berikut di 
 
 3. **Configure Project**
    - Framework Preset: **Next.js** (auto-detected)
-   - Build Command: `prisma generate && next build`
-   - Install Command: `bun install`
+   - Build Command: `bun run fetch:ffmpeg && prisma generate && next build` (sudah dikonfigurasi di vercel.json)
+   - Install Command: `bun install` (sudah dikonfigurasi di vercel.json)
    - Root Directory: `./`
 
 4. **Add Environment Variables**

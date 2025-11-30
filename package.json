@@ -6,12 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint .",
+    "fetch:ffmpeg": "bun scripts/fetch-ffmpeg-core.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
     "@prisma/client": "^7.0.1",
     "@sentry/nextjs": "^10.27.0",
     "audiobuffer-to-wav": "^1.0.0",
