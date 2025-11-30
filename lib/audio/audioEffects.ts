@@ -20,6 +20,18 @@ export interface EffectPreset {
       enabled: boolean;
       width: number;
     };
+    multibandCompressor?: {
+      enabled: boolean;
+      bands: Array<{
+        name: string;
+        lowFreq: number;
+        highFreq: number;
+        threshold: number;
+        ratio: number;
+        gain: number;
+        active: boolean;
+      }>;
+    };
   };
 }
 
@@ -29,6 +41,16 @@ export const effectPresets: Record<string, EffectPreset> = {
     settings: {
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 100 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -20, ratio: 3, gain: 0, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -18, ratio: 3.5, gain: 0, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -16, ratio: 3, gain: 0, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -17, ratio: 3, gain: 0, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -15, ratio: 2.5, gain: 0, active: true },
+        ],
+      },
     },
   },
   mastering: {
@@ -42,6 +64,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 110 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -22, ratio: 3, gain: 0.5, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -20, ratio: 3.5, gain: 0, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -18, ratio: 3.5, gain: 0.5, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -19, ratio: 3, gain: 0, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -17, ratio: 2.5, gain: 0, active: true },
+        ],
+      },
     },
   },
   loud: {
@@ -55,6 +87,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 110 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -15, ratio: 5, gain: 1, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -13, ratio: 5.5, gain: 1, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -12, ratio: 5, gain: 1, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -13, ratio: 4.5, gain: 0.5, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -11, ratio: 4, gain: 0.5, active: true },
+        ],
+      },
     },
   },
   warm: {
@@ -62,6 +104,16 @@ export const effectPresets: Record<string, EffectPreset> = {
     settings: {
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 105 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -22, ratio: 2.5, gain: 1.5, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -20, ratio: 3, gain: 1, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -19, ratio: 2.5, gain: 0.5, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -21, ratio: 2, gain: -0.5, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -23, ratio: 2, gain: -1, active: true },
+        ],
+      },
     },
   },
   bright: {
@@ -75,6 +127,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 115 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -24, ratio: 2, gain: -0.5, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -22, ratio: 2.5, gain: 0, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -20, ratio: 2.5, gain: 0.5, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -18, ratio: 3, gain: 1, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -16, ratio: 2.5, gain: 1.5, active: true },
+        ],
+      },
     },
   },
   vintage: {
@@ -82,6 +144,16 @@ export const effectPresets: Record<string, EffectPreset> = {
     settings: {
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 100 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -21, ratio: 2.5, gain: 1, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -19, ratio: 3, gain: 0.5, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -18, ratio: 2.8, gain: 0, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -20, ratio: 2.5, gain: -0.5, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -22, ratio: 2, gain: -1, active: true },
+        ],
+      },
     },
   },
   punchy: {
@@ -96,6 +168,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 110 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -18, ratio: 4, gain: 1, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -14, ratio: 5, gain: 2, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -16, ratio: 4, gain: 1, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -17, ratio: 3.5, gain: 0.5, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -15, ratio: 3, gain: 0.5, active: true },
+        ],
+      },
     },
   },
   smooth: {
@@ -109,6 +191,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 100 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -24, ratio: 2, gain: 0, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -22, ratio: 2.2, gain: 0, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -21, ratio: 2, gain: 0, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -22, ratio: 2, gain: 0, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -20, ratio: 1.8, gain: 0, active: true },
+        ],
+      },
     },
   },
   aggressive: {
@@ -123,6 +215,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 115 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -12, ratio: 7, gain: 2, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -10, ratio: 8, gain: 2.5, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -11, ratio: 7.5, gain: 2, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -12, ratio: 6.5, gain: 1.5, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -10, ratio: 6, gain: 1.5, active: true },
+        ],
+      },
     },
   },
   clean: {
@@ -136,6 +238,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 100 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -26, ratio: 1.8, gain: 0, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -24, ratio: 2, gain: 0, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -23, ratio: 2, gain: 0, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -24, ratio: 1.8, gain: 0, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -22, ratio: 1.8, gain: 0, active: true },
+        ],
+      },
     },
   },
   deep: {
@@ -149,6 +261,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 110 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -18, ratio: 3, gain: 2, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -17, ratio: 3.5, gain: 1.5, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -19, ratio: 3, gain: 0.5, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -20, ratio: 2.5, gain: 0, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -22, ratio: 2, gain: -0.5, active: true },
+        ],
+      },
     },
   },
   crisp: {
@@ -162,6 +284,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 115 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -23, ratio: 2.5, gain: -0.5, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -21, ratio: 2.8, gain: 0, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -19, ratio: 3, gain: 0.5, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -17, ratio: 3.2, gain: 1.5, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -15, ratio: 3, gain: 2, active: true },
+        ],
+      },
     },
   },
   wide: {
@@ -175,6 +307,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 150 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -22, ratio: 2.5, gain: 0.5, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -20, ratio: 2.8, gain: 0, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -19, ratio: 2.5, gain: 0, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -20, ratio: 2.5, gain: 0.5, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -18, ratio: 2.5, gain: 0.5, active: true },
+        ],
+      },
     },
   },
   intimate: {
@@ -188,6 +330,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 90 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -27, ratio: 1.8, gain: 0, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -25, ratio: 2, gain: 0, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -24, ratio: 2, gain: 0.5, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -25, ratio: 1.8, gain: 0, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -23, ratio: 1.8, gain: 0, active: true },
+        ],
+      },
     },
   },
   epic: {
@@ -202,6 +354,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 130 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -16, ratio: 4.5, gain: 2, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -15, ratio: 4.5, gain: 1.5, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -16, ratio: 4, gain: 1, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -15, ratio: 4, gain: 1.5, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -13, ratio: 3.5, gain: 2, active: true },
+        ],
+      },
     },
   },
   modern: {
@@ -216,6 +378,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 110 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -19, ratio: 3.5, gain: 1, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -18, ratio: 3.8, gain: 0.5, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -17, ratio: 3.5, gain: 0.5, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -18, ratio: 3.2, gain: 0.5, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -16, ratio: 3, gain: 1, active: true },
+        ],
+      },
     },
   },
   rock: {
@@ -230,6 +402,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 115 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -15, ratio: 5, gain: 1.5, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -13, ratio: 5.5, gain: 2, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -14, ratio: 5, gain: 1.5, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -15, ratio: 4.5, gain: 1, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -13, ratio: 4, gain: 1, active: true },
+        ],
+      },
     },
   },
   electronic: {
@@ -244,6 +426,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 120 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -13, ratio: 6.5, gain: 2, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -11, ratio: 7, gain: 2.5, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -12, ratio: 6.5, gain: 2, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -11, ratio: 6, gain: 2, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -9, ratio: 5.5, gain: 2.5, active: true },
+        ],
+      },
     },
   },
   acoustic: {
@@ -257,6 +449,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 105 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -23, ratio: 2, gain: 0.5, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -21, ratio: 2.2, gain: 0, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -20, ratio: 2.2, gain: 0.5, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -21, ratio: 2, gain: 0, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -19, ratio: 2, gain: 0.5, active: true },
+        ],
+      },
     },
   },
   cinematic: {
@@ -271,6 +473,16 @@ export const effectPresets: Record<string, EffectPreset> = {
       },
       limiter: { enabled: true, threshold: -0.3 },
       stereoWidth: { enabled: true, width: 130 },
+      multibandCompressor: {
+        enabled: true,
+        bands: [
+          { name: 'LOW', lowFreq: 20, highFreq: 150, threshold: -18, ratio: 3.5, gain: 2, active: true },
+          { name: 'LOW-MID', lowFreq: 150, highFreq: 800, threshold: -17, ratio: 4, gain: 1.5, active: true },
+          { name: 'MID', lowFreq: 800, highFreq: 3000, threshold: -16, ratio: 3.8, gain: 1, active: true },
+          { name: 'HIGH-MID', lowFreq: 3000, highFreq: 10000, threshold: -17, ratio: 3.5, gain: 1.5, active: true },
+          { name: 'HIGH', lowFreq: 10000, highFreq: 20000, threshold: -15, ratio: 3.2, gain: 2, active: true },
+        ],
+      },
     },
   },
 };

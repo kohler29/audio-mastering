@@ -473,6 +473,12 @@ export function AudioMasteringPlugin() {
               width: preset.settings.stereoWidth.width,
             },
           }),
+          ...(preset.settings.multibandCompressor && {
+            multibandCompressor: {
+              enabled: preset.settings.multibandCompressor.enabled,
+              bands: preset.settings.multibandCompressor.bands,
+            },
+          }),
         };
         applyPresetSettings(convertedSettings);
       }
