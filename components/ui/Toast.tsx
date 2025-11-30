@@ -18,12 +18,16 @@ interface ToastProps {
 
 export function Toast({ toast, onClose }: ToastProps) {
   useEffect(() => {
+    // Different auto-hide duration based on toast type
+    // Info toasts (like A/B toggle) are shorter, errors/success are longer
+    const duration = toast.type === 'info' ? 2500 : 4000;
+    
     const timer = setTimeout(() => {
       onClose(toast.id);
-    }, 4000); // Auto close after 4 seconds
+    }, duration);
 
     return () => clearTimeout(timer);
-  }, [toast.id, onClose]);
+  }, [toast.id, toast.type, onClose]);
 
   const getIcon = () => {
     switch (toast.type) {

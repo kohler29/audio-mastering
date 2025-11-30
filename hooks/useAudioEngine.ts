@@ -27,6 +27,8 @@ export interface UseAudioEngineReturn {
   getWaveformData: (width?: number) => Float32Array | null;
   getStereoWaveformData: (width?: number) => { left: Float32Array; right: Float32Array } | null;
   measureOfflineLoudness: (settings: AudioEngineSettings) => Promise<{ integrated: number; truePeak: number }>;
+  toggleMasterBypass: (showOriginal: boolean) => void;
+  getMasterBypassState: () => boolean;
 }
 
 export function useAudioEngine(): UseAudioEngineReturn {
@@ -272,6 +274,22 @@ export function useAudioEngine(): UseAudioEngineReturn {
     }
   }, [engine]);
 
+  const toggleMasterBypass = useCallback((showOriginal: boolean) => {
+    if (!engine) return;
+    try {
+      engine.toggleMasterBypass(showOriginal);
+      setError(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to toggle master bypass';
+      setError(errorMessage);
+    }
+  }, [engine]);
+
+  const getMasterBypassState = useCallback((): boolean => {
+    if (!engine) return false;
+    return engine.getMasterBypassState();
+  }, [engine]);
+
   return {
     engine,
     isInitialized,
@@ -296,5 +314,7 @@ export function useAudioEngine(): UseAudioEngineReturn {
     getWaveformData,
     getStereoWaveformData,
     measureOfflineLoudness,
+    toggleMasterBypass,
+    getMasterBypassState,
   };
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import * as Sentry from '@sentry/nextjs';
-import { Play, Pause, SkipBack, SkipForward, Settings, Save, Upload, Download, LogOut } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X } from 'lucide-react';
 import { Waveform } from './audio/Waveform';
 import { SpectrumAnalyzer } from './audio/SpectrumAnalyzer';
 import { Knob } from './audio/Knob';
@@ -94,6 +94,8 @@ export function AudioMasteringPlugin() {
     resumeContext,
     getStereoWaveformData,
     measureOfflineLoudness,
+    toggleMasterBypass,
+    getMasterBypassState,
   } = useAudioEngine();
 
   const { savePreset, presets: dbPresets, isLoading: presetsLoading, loadPreset } = usePresets();
@@ -104,6 +106,8 @@ export function AudioMasteringPlugin() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showSavePresetModal, setShowSavePresetModal] = useState(false);
   const [presetName, setPresetName] = useState('');
+  const [isShowingOriginal, setIsShowingOriginal] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
   const [presetIsPublic, setPresetIsPublic] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [leftWaveformData, setLeftWaveformData] = useState<Float32Array | null>(null);
@@ -277,6 +281,14 @@ export function AudioMasteringPlugin() {
     }
   }, [isInitialized, updateSettings, getCurrentSettings]);
 
+  // Reset A/B state when new audio file is loaded
+  useEffect(() => {
+    if (audioFile && isInitialized) {
+      setIsShowingOriginal(false);
+      toggleMasterBypass(false);
+    }
+  }, [audioFile, isInitialized, toggleMasterBypass]);
+
   const processAudioFile = async (file: File) => {
     if (!isInitialized) {
       showToast('Audio engine sedang diinisialisasi. Silakan tunggu sebentar...', 'error');
@@ -380,6 +392,13 @@ export function AudioMasteringPlugin() {
 
   const handleStop = () => {
     stop();
+  };
+
+  const handleToggleAB = () => {
+    const newState = !isShowingOriginal;
+    setIsShowingOriginal(newState);
+    toggleMasterBypass(newState);
+    showToast(newState ? 'Showing Original (A)' : 'Showing Mastered (B)', 'info');
   };
 
   const handleSeek = (time: number) => {
@@ -588,6 +607,14 @@ export function AudioMasteringPlugin() {
         if (!acknowledged) {
           setShowDisclaimer(true);
         }
+        
+        // Check if user has seen latest changelog
+        const CHANGELOG_VERSION = 'v2.0.0'; // Update this when adding new features
+        const CHANGELOG_STORAGE_KEY = 'CHANGELOG_VIEWED';
+        const lastViewedVersion = window.localStorage.getItem(CHANGELOG_STORAGE_KEY);
+        if (lastViewedVersion !== CHANGELOG_VERSION) {
+          setShowChangelog(true);
+        }
       }
     } catch {
       // Ignore storage errors
@@ -701,8 +728,14 @@ export function AudioMasteringPlugin() {
           >
             <Save className="w-4 h-4" />
           </button>
-          <button aria-label="Settings" className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-2 rounded-lg border border-zinc-600 transition-colors">
-            <Settings className="w-4 h-4" />
+          <button 
+            onClick={() => setShowChangelog(true)}
+            aria-label="What's New"
+            className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-2 rounded-lg border border-zinc-600 transition-colors relative"
+            title="What's New - Latest Features"
+          >
+            <Bell className="w-4 h-4" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></span>
           </button>
           <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 rounded-lg border border-zinc-700 max-w-full">
             <span className="text-zinc-400 text-xs">{user?.username}</span>
@@ -816,6 +849,19 @@ export function AudioMasteringPlugin() {
                   disabled={!audioFile || isLoading}
                 >
                   <SkipForward className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={handleToggleAB}
+                  aria-label={isShowingOriginal ? 'Show Mastered (B)' : 'Show Original (A)'}
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isShowingOriginal
+                      ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                      : 'bg-purple-600 hover:bg-purple-500 text-white'
+                  }`}
+                  disabled={!audioFile || isLoading}
+                  title={isShowingOriginal ? 'Currently showing Original (A) - Click to show Mastered (B)' : 'Currently showing Mastered (B) - Click to show Original (A)'}
+                >
+                  {isShowingOriginal ? 'A' : 'B'}
                 </button>
                 <div className="flex items-center gap-2 ml-2">
                   <input
@@ -1196,6 +1242,96 @@ export function AudioMasteringPlugin() {
         }}
         onClose={() => setShowDisclaimer(false)}
       />
+
+      {/* Changelog Modal */}
+      {showChangelog && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-zinc-800 rounded-xl p-6 w-full max-w-2xl border border-zinc-700 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-zinc-100 text-xl font-semibold flex items-center gap-2">
+                <Bell className="w-5 h-5 text-cyan-400" />
+                What&apos;s New
+              </h2>
+              <button 
+                onClick={() => {
+                  setShowChangelog(false);
+                  try {
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem('CHANGELOG_VIEWED', 'v2.0.0');
+                    }
+                  } catch {
+                    // Ignore storage errors
+                  }
+                }}
+                className="text-zinc-400 hover:text-zinc-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-cyan-900/20 border border-cyan-700/50 rounded-lg p-4">
+                <h3 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-lg">✨</span> A/B Comparison Feature
+                </h3>
+                <p className="text-zinc-300 text-sm leading-relaxed">
+                  Compare your audio before and after mastering in real-time! Click the <span className="font-semibold text-cyan-400">A/B button</span> next to the play controls to switch between original (A) and mastered (B) audio instantly.
+                </p>
+              </div>
+
+              <div className="bg-emerald-900/20 border border-emerald-700/50 rounded-lg p-4">
+                <h3 className="text-emerald-400 font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-lg">🎵</span> Enhanced Export Options
+                </h3>
+                <p className="text-zinc-300 text-sm leading-relaxed">
+                  Export your mastered audio in multiple formats:
+                </p>
+                <ul className="text-zinc-300 text-sm mt-2 space-y-1 ml-4 list-disc">
+                  <li><span className="font-semibold">MP3</span> - High quality 320 kbps</li>
+                  <li><span className="font-semibold">FLAC</span> - Lossless audio format</li>
+                  <li><span className="font-semibold">WAV</span> - Multiple quality options (16-bit, 24-bit, 32-bit)</li>
+                </ul>
+              </div>
+
+              <div className="bg-purple-900/20 border border-purple-700/50 rounded-lg p-4">
+                <h3 className="text-purple-400 font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-lg">⚡</span> Performance Improvements
+                </h3>
+                <p className="text-zinc-300 text-sm leading-relaxed">
+                  Improved audio processing performance and smoother real-time playback experience.
+                </p>
+              </div>
+
+              <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-4">
+                <h3 className="text-amber-400 font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-lg">🔔</span> Smart Notifications
+                </h3>
+                <p className="text-zinc-300 text-sm leading-relaxed">
+                  Toast notifications now auto-hide automatically. Info notifications disappear after 2.5 seconds, while important messages stay for 4 seconds.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-zinc-700">
+              <button
+                onClick={() => {
+                  setShowChangelog(false);
+                  try {
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem('CHANGELOG_VIEWED', 'v2.0.0');
+                    }
+                  } catch {
+                    // Ignore storage errors
+                  }
+                }}
+                className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+              >
+                Got it!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onClose={removeToast} />

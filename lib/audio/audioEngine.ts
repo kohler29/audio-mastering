@@ -167,6 +167,10 @@ export class AudioEngine {
   private limiterBypass: GainNode | null = null;
   private limiterOutput: GainNode | null = null;
   private multibandMix: GainNode | null = null;
+  // Master bypass for A/B comparison (bypass all effects)
+  private masterBypass: GainNode | null = null;
+  private masterMix: GainNode | null = null;
+  private masterOutput: GainNode | null = null;
   // Precomputed curves cache
   private saturationCurveCache: Map<string, Float32Array> = new Map();
   // Gain reduction tracking
@@ -406,6 +410,9 @@ export class AudioEngine {
     this.multibandOutput = null;
     this.multibandMix = null;
     this.masterFade = null;
+    this.masterBypass = null;
+    this.masterMix = null;
+    this.masterOutput = null;
   }
 
   // Build audio graph sekali saja (dipanggil saat file loaded)
@@ -478,6 +485,13 @@ export class AudioEngine {
     this.limiterBypass.gain.value = settings.limiter.enabled ? 0 : 1;
     this.limiterOutput = this.audioContext.createGain();
 
+    // Master bypass for A/B comparison (bypass all effects)
+    this.masterBypass = this.audioContext.createGain();
+    this.masterBypass.gain.value = 0; // Default: show mastered (bypass off)
+    this.masterMix = this.audioContext.createGain();
+    this.masterMix.gain.value = 1; // Default: show mastered
+    this.masterOutput = this.audioContext.createGain();
+
     // Output gain
     this.gainNodes.output = this.audioContext.createGain();
     this.gainNodes.output.gain.value = this.dbToGain(settings.outputGain);
@@ -489,6 +503,15 @@ export class AudioEngine {
   // Connect audio graph (dipanggil sekali saat build)
   private connectAudioGraph(settings: AudioEngineSettings): void {
     if (!this.audioContext || !this.gainNodes.input) return;
+    
+    // Ensure master bypass nodes are created
+    if (!this.masterBypass || !this.masterMix || !this.masterOutput) {
+      this.masterBypass = this.audioContext.createGain();
+      this.masterBypass.gain.value = 0;
+      this.masterMix = this.audioContext.createGain();
+      this.masterMix.gain.value = 1;
+      this.masterOutput = this.audioContext.createGain();
+    }
 
     // Multiband Compressor - always route through multibandMix
     // This ensures routing is always correct even when enabled state changes
@@ -729,8 +752,21 @@ export class AudioEngine {
     this.limiterMix!.connect(this.limiterOutput!);
     this.limiterBypass!.connect(this.limiterOutput!);
 
-    // Langsung connect limiter output ke output gain (fade hanya untuk export)
-    this.limiterOutput!.connect(this.gainNodes.output!);
+    // Master bypass for A/B comparison
+    if (this.masterBypass && this.masterMix && this.masterOutput) {
+      // Original signal (bypass all effects) - connect input gain directly
+      this.gainNodes.input!.connect(this.masterBypass);
+      // Mastered signal (through all effects) - connect limiter output
+      this.limiterOutput!.connect(this.masterMix);
+      // Mix original and mastered
+      this.masterBypass.connect(this.masterOutput);
+      this.masterMix.connect(this.masterOutput);
+      // Connect master output to output gain
+      this.masterOutput.connect(this.gainNodes.output!);
+    } else {
+      // Fallback: connect limiter output directly to output gain if master bypass not available
+      this.limiterOutput!.connect(this.gainNodes.output!);
+    }
 
     // Connect to analyser and destination
     this.gainNodes.output!.connect(this.analyserNode!);
@@ -1599,9 +1635,6 @@ export class AudioEngine {
       }
       rightWaveform[i] = maxRight;
     }
-      rightWaveform100: rightWaveform[100],
-      areSameArray: leftWaveform === rightWaveform
-    });
 
     return { left: leftWaveform, right: rightWaveform };
   }
@@ -3555,6 +3588,35 @@ export class AudioEngine {
     const current = this.masterFade.gain.value;
     this.masterFade.gain.setValueAtTime(current, now);
     this.masterFade.gain.linearRampToValueAtTime(0, now + dur);
+  }
+
+  /**
+   * Toggle master bypass untuk A/B comparison
+   * @param showOriginal - true untuk show original (bypass all), false untuk show mastered
+   */
+  toggleMasterBypass(showOriginal: boolean): void {
+    if (!this.audioContext || !this.masterBypass || !this.masterMix) return;
+    
+    const now = this.audioContext.currentTime;
+    
+    if (showOriginal) {
+      // Show original: bypass all effects
+      this.masterBypass.gain.setValueAtTime(1, now);
+      this.masterMix.gain.setValueAtTime(0, now);
+    } else {
+      // Show mastered: through all effects
+      this.masterBypass.gain.setValueAtTime(0, now);
+      this.masterMix.gain.setValueAtTime(1, now);
+    }
+  }
+
+  /**
+   * Get current master bypass state
+   * @returns true if showing original (bypass), false if showing mastered
+   */
+  getMasterBypassState(): boolean {
+    if (!this.masterBypass) return false;
+    return this.masterBypass.gain.value > 0.5;
   }
 
   destroy(): void {
