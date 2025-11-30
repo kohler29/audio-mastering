@@ -20,8 +20,16 @@ export const seoConfig: SEOConfig = {
   twitterHandle: process.env.NEXT_PUBLIC_TWITTER_HANDLE || "@masterpro",
   stage: process.env.NEXT_PUBLIC_APP_STAGE || "beta",
   bannerText: process.env.NEXT_PUBLIC_APP_BANNER || "Beta",
-  ogImageUrl:
-    process.env.NEXT_PUBLIC_OG_IMAGE_URL ||
-    `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/og-image.jpeg`,
+  // Ensure absolute URL for og-image (required for WhatsApp and social media)
+  ogImageUrl: (() => {
+    const customUrl = process.env.NEXT_PUBLIC_OG_IMAGE_URL;
+    if (customUrl) {
+      // If custom URL is provided, ensure it's absolute
+      return customUrl.startsWith('http') ? customUrl : `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}${customUrl.startsWith('/') ? '' : '/'}${customUrl}`;
+    }
+    // Default: use site URL + /og-image.jpeg
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    return `${siteUrl}/og-image.jpeg`;
+  })(),
   themeColor: process.env.NEXT_PUBLIC_THEME_COLOR || "#0f172a",
 };

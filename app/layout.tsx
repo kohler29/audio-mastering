@@ -44,10 +44,13 @@ export const metadata: Metadata = {
     siteName: seoConfig.siteName,
     images: [
       {
+        // Ensure absolute URL for WhatsApp and other social media
+        // WhatsApp requires absolute URLs that are publicly accessible
         url: seoConfig.ogImageUrl,
         width: 1200,
         height: 630,
         alt: seoConfig.siteName,
+        type: "image/jpeg",
       },
     ],
   },
