@@ -2,15 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import * as Sentry from '@sentry/nextjs';
-import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X, Edit, Trash2, Folder } from 'lucide-react';
 import { Waveform } from './audio/Waveform';
 import { SpectrumAnalyzer } from './audio/SpectrumAnalyzer';
 import { Knob } from './audio/Knob';
 import { VUMeter } from './audio/VUMeter';
 import { MultibandCompressor } from './audio/MultibandCompressor';
-import { Harmonizer } from './audio/Harmonizer';
 import { Reverb } from './audio/Reverb';
-import { Saturation } from './audio/Saturation';
 import { ExportModal } from './audio/ExportModal';
 import { LoudnessMeter } from './audio/LoudnessMeter';
 import { useAudioEngine } from '@/hooks/useAudioEngine';
@@ -61,9 +59,7 @@ function DisclaimerModal({ title, text, acceptLabel, closeLabel, isOpen, onAccep
 }
 
 export function AudioMasteringPlugin() {
-  const FEATURE_HAAS = process.env.NEXT_PUBLIC_FEATURE_HAAS === 'true';
   const FEATURE_REVERB = process.env.NEXT_PUBLIC_FEATURE_REVERB === 'true';
-  const FEATURE_HARMONIZER = process.env.NEXT_PUBLIC_FEATURE_HARMONIZER === 'true';
   const DISCLAIMER_TEXT = process.env.NEXT_PUBLIC_DISCLAIMER_NO_STORAGE_TEXT || 'Kami tidak menyimpan data audio apapun di website ini.';
   const DISCLAIMER_STORAGE_KEY = process.env.NEXT_PUBLIC_DISCLAIMER_STORAGE_KEY || 'DISCLAIMER_ACK';
   const DISCLAIMER_TITLE = process.env.NEXT_PUBLIC_DISCLAIMER_TITLE || 'Pernyataan Privasi & Keamanan Data';
@@ -98,14 +94,20 @@ export function AudioMasteringPlugin() {
     getMasterBypassState,
   } = useAudioEngine();
 
-  const { savePreset, presets: dbPresets, isLoading: presetsLoading, loadPreset } = usePresets();
+  const { savePreset, presets: dbPresets, isLoading: presetsLoading, loadPreset, updatePreset, deletePreset, refreshPresets } = usePresets();
   const { user, logout } = useAuth();
 
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioFileName, setAudioFileName] = useState<string>('');
   const [showExportModal, setShowExportModal] = useState(false);
   const [showSavePresetModal, setShowSavePresetModal] = useState(false);
+  const [showEditPresetModal, setShowEditPresetModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null);
+  const [deletingPresetName, setDeletingPresetName] = useState<string>('');
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [presetName, setPresetName] = useState('');
+  const [presetFolder, setPresetFolder] = useState<string>('');
   const [isShowingOriginal, setIsShowingOriginal] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
   const [presetIsPublic, setPresetIsPublic] = useState(false);
@@ -144,16 +146,6 @@ export function AudioMasteringPlugin() {
   // Stereo Width states
   const [stereoEnabled, setStereoEnabled] = useState(true);
   const [stereoWidth, setStereoWidth] = useState(100);
-  // Haas widener states
-  const [haasEnabled, setHaasEnabled] = useState(false);
-  const [haasDelayMs, setHaasDelayMs] = useState(12);
-  const [haasMix, setHaasMix] = useState(30);
-  
-  // Harmonizer states
-  const [harmonizerEnabled, setHarmonizerEnabled] = useState(true);
-  const [harmonizerMix, setHarmonizerMix] = useState(30);
-  const [harmonizerDepth, setHarmonizerDepth] = useState(50);
-  const [harmonizerTone, setHarmonizerTone] = useState(0);
   
   // Reverb states
   const [reverbEnabled, setReverbEnabled] = useState(true);
@@ -162,13 +154,9 @@ export function AudioMasteringPlugin() {
   const [reverbDecay, setReverbDecay] = useState(2.5);
   const [reverbDamping, setReverbDamping] = useState(50);
   
-  // Saturation states
-  const [saturationEnabled, setSaturationEnabled] = useState(true);
-  const [saturationDrive, setSaturationDrive] = useState(25);
-  const [saturationMix, setSaturationMix] = useState(40);
-  const [saturationBias, setSaturationBias] = useState(0);
-  const [saturationMode, setSaturationMode] = useState<'tube' | 'tape' | 'soft'>('soft');
-
+  
+  // Vintage Drive states
+  
   const presetNames = [
     'Default', 
     'Mastering', 
@@ -215,30 +203,12 @@ export function AudioMasteringPlugin() {
         enabled: stereoEnabled,
         width: stereoWidth,
       },
-      haas: {
-        enabled: haasEnabled,
-        delayMs: haasDelayMs,
-        mix: haasMix,
-      },
-      harmonizer: {
-        enabled: harmonizerEnabled,
-        mix: harmonizerMix,
-        depth: harmonizerDepth,
-        tone: harmonizerTone,
-      },
       reverb: {
         enabled: reverbEnabled,
         mix: reverbMix,
         size: reverbSize,
         decay: reverbDecay,
         damping: reverbDamping,
-      },
-      saturation: {
-        enabled: saturationEnabled,
-        drive: saturationDrive,
-        mix: saturationMix,
-        bias: saturationBias,
-        mode: saturationMode,
       },
       multibandCompressor: {
         enabled: multibandEnabled,
@@ -257,10 +227,8 @@ export function AudioMasteringPlugin() {
     inputGain, outputGain, 
     compressorEnabled, compThreshold, compRatio, compAttack, compRelease, compGain,
     limiterEnabled, limiterThreshold, 
-    stereoEnabled, stereoWidth, haasEnabled, haasDelayMs, haasMix,
-    harmonizerEnabled, harmonizerMix, harmonizerDepth, harmonizerTone,
+    stereoEnabled, stereoWidth,
     reverbEnabled, reverbMix, reverbSize, reverbDecay, reverbDamping, 
-    saturationEnabled, saturationDrive, saturationMix, saturationBias, saturationMode,
     multibandEnabled, multibandBands,
   ]);
 
@@ -321,11 +289,8 @@ export function AudioMasteringPlugin() {
       setCompressorEnabled(false);
       setLimiterEnabled(false);
       setStereoEnabled(false);
-      setHarmonizerEnabled(false);
       setReverbEnabled(false);
-      setSaturationEnabled(false);
       setMultibandEnabled(false);
-      setHaasEnabled(false);
   } catch (err) {
       console.error('Failed to load audio file:', err);
       Sentry.captureException(err, {
@@ -496,10 +461,7 @@ export function AudioMasteringPlugin() {
     setCompressorEnabled(true);
     setLimiterEnabled(true);
     setStereoEnabled(true);
-    setHarmonizerEnabled(false);
     setReverbEnabled(false);
-    setSaturationEnabled(false);
-    setHaasEnabled(false);
     
     if (settings.inputGain !== undefined) setInputGain(settings.inputGain);
     if (settings.outputGain !== undefined) setOutputGain(settings.outputGain);
@@ -547,7 +509,7 @@ export function AudioMasteringPlugin() {
 
   const handleSavePreset = async () => {
     if (!presetName.trim()) {
-      showToast('Please enter a preset name', 'error');
+      showToast('Masukkan nama preset', 'error');
       return;
     }
 
@@ -557,18 +519,105 @@ export function AudioMasteringPlugin() {
         name: presetName,
         settings,
         isPublic: presetIsPublic,
+        folder: presetFolder.trim() || null,
       });
       setShowSavePresetModal(false);
       setPresetName('');
+      setPresetFolder('');
       setPresetIsPublic(false);
-      showToast(`Preset "${presetName}" saved successfully!`, 'success');
+      await refreshPresets();
+      showToast(`Preset "${presetName}" berhasil disimpan!`, 'success');
     } catch (err) {
       console.error('Failed to save preset:', err);
       Sentry.captureException(err, {
         tags: { component: 'AudioMasteringPlugin', action: 'savePreset' },
-        extra: { presetName, isPublic: presetIsPublic },
+        extra: { presetName, isPublic: presetIsPublic, folder: presetFolder },
       });
-      showToast(err instanceof Error ? err.message : 'Failed to save preset', 'error');
+      showToast(err instanceof Error ? err.message : 'Gagal menyimpan preset', 'error');
+    }
+  };
+
+  const handleEditPreset = (presetId: string) => {
+    const preset = dbPresets.find(p => p.id === presetId);
+    if (!preset || preset.userId !== user?.id) {
+      showToast('Tidak memiliki izin untuk mengedit preset ini', 'error');
+      return;
+    }
+    setEditingPresetId(presetId);
+    setPresetName(preset.name);
+    setPresetFolder(preset.folder || '');
+    setPresetIsPublic(preset.isPublic);
+    setShowEditPresetModal(true);
+  };
+
+  const handleUpdatePreset = async () => {
+    if (!editingPresetId || !presetName.trim()) {
+      showToast('Masukkan nama preset', 'error');
+      return;
+    }
+
+    try {
+      const settings = getCurrentSettings();
+      await updatePreset(editingPresetId, {
+        name: presetName,
+        settings,
+        isPublic: presetIsPublic,
+        folder: presetFolder.trim() || null,
+      });
+      setShowEditPresetModal(false);
+      setEditingPresetId(null);
+      setPresetName('');
+      setPresetFolder('');
+      setPresetIsPublic(false);
+      await refreshPresets();
+      showToast(`Preset "${presetName}" berhasil diupdate!`, 'success');
+    } catch (err) {
+      console.error('Failed to update preset:', err);
+      Sentry.captureException(err, {
+        tags: { component: 'AudioMasteringPlugin', action: 'updatePreset' },
+        extra: { presetId: editingPresetId, presetName, isPublic: presetIsPublic, folder: presetFolder },
+      });
+      showToast(err instanceof Error ? err.message : 'Gagal mengupdate preset', 'error');
+    }
+  };
+
+  const handleDeletePresetClick = (presetId: string) => {
+    const preset = dbPresets.find(p => p.id === presetId);
+    if (!preset || preset.userId !== user?.id) {
+      showToast('Tidak memiliki izin untuk menghapus preset ini', 'error');
+      return;
+    }
+    setDeletingPresetId(presetId);
+    setDeletingPresetName(preset.name);
+    setShowDeleteConfirmModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingPresetId) return;
+
+    try {
+      const success = await deletePreset(deletingPresetId);
+      if (success) {
+        await refreshPresets();
+        showToast(`Preset "${deletingPresetName}" berhasil dihapus!`, 'success');
+        if (selectedPresetId === deletingPresetId) {
+          setSelectedPresetId(null);
+          setSelectedPreset('default');
+        }
+      } else {
+        showToast('Gagal menghapus preset', 'error');
+      }
+    } catch (err) {
+      console.error('Failed to delete preset:', err);
+      Sentry.captureException(err, {
+        tags: { component: 'AudioMasteringPlugin', action: 'deletePreset' },
+        extra: { presetId: deletingPresetId },
+      });
+      showToast('Gagal menghapus preset', 'error');
+    } finally {
+      setShowDeleteConfirmModal(false);
+      setDeletingPresetId(null);
+      setDeletingPresetName('');
     }
   };
 
@@ -622,7 +671,7 @@ export function AudioMasteringPlugin() {
         }
         
         // Check if user has seen latest changelog
-        const CHANGELOG_VERSION = 'v2.0.0'; // Update this when adding new features
+        const CHANGELOG_VERSION = 'v2.1.0'; // Update this when adding new features
         const CHANGELOG_STORAGE_KEY = 'CHANGELOG_VIEWED';
         const lastViewedVersion = window.localStorage.getItem(CHANGELOG_STORAGE_KEY);
         if (lastViewedVersion !== CHANGELOG_VERSION) {
@@ -708,36 +757,78 @@ export function AudioMasteringPlugin() {
             <span className="text-sm">Export</span>
           </button>
 
-          <select 
-            value={selectedPresetId ? `db-${selectedPresetId}` : selectedPreset}
-            onChange={(e) => handlePresetChange(e.target.value)}
-            className="bg-zinc-700 text-zinc-100 px-3 md:px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 text-sm min-w-[140px] sm:min-w-[180px] md:min-w-[200px]"
-            disabled={presetsLoading}
-          >
-            <optgroup label="Built-in Presets">
-              {presetNames.map(p => (
-                <option key={p} value={p.toLowerCase()}>{p}</option>
-              ))}
-            </optgroup>
-            {dbPresets.length > 0 && (
-              <optgroup label="My Presets">
-                {dbPresets.filter(p => p.userId === user?.id).map(p => (
-                  <option key={p.id} value={`db-${p.id}`}>
-                    {p.name} {p.isPublic ? '🌐' : '🔒'}
-                  </option>
+          <div className="relative flex items-center gap-2">
+            <select 
+              value={selectedPresetId ? `db-${selectedPresetId}` : selectedPreset}
+              onChange={(e) => handlePresetChange(e.target.value)}
+              className="bg-zinc-700 text-zinc-100 px-3 md:px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 text-sm min-w-[140px] sm:min-w-[180px] md:min-w-[200px]"
+              disabled={presetsLoading}
+            >
+              <optgroup label="Built-in Presets">
+                {presetNames.map(p => (
+                  <option key={p} value={p.toLowerCase()}>{p}</option>
                 ))}
               </optgroup>
+              {(() => {
+                const myPresets = dbPresets.filter(p => p.userId === user?.id);
+                const folders = Array.from(new Set(myPresets.map(p => p.folder).filter((f): f is string => f !== null)));
+                folders.sort();
+                
+                if (myPresets.length > 0) {
+                  return (
+                    <>
+                      {myPresets.filter(p => !p.folder).length > 0 && (
+                        <optgroup label="My Presets">
+                          {myPresets.filter(p => !p.folder).map(p => (
+                            <option key={p.id} value={`db-${p.id}`}>
+                              {p.name} {p.isPublic ? '🌐' : '🔒'}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {folders.map(folder => (
+                        <optgroup key={folder} label={`📁 ${folder}`}>
+                          {myPresets.filter(p => p.folder === folder).map(p => (
+                            <option key={p.id} value={`db-${p.id}`}>
+                              {p.name} {p.isPublic ? '🌐' : '🔒'}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </>
+                  );
+                }
+                return null;
+              })()}
+              {dbPresets.filter(p => p.isPublic && p.userId !== user?.id).length > 0 && (
+                <optgroup label="Published by Others">
+                  {dbPresets.filter(p => p.isPublic && p.userId !== user?.id).map(p => (
+                    <option key={p.id} value={`db-${p.id}`}>
+                      {p.name} by {p.user?.username || 'Unknown'}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+            {selectedPresetId && dbPresets.find(p => p.id === selectedPresetId && p.userId === user?.id) && (
+              <div className="flex gap-1">
+                <button
+                  onClick={() => handleEditPreset(selectedPresetId)}
+                  className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-2 rounded-lg border border-zinc-600 transition-colors"
+                  title="Edit Preset"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDeletePresetClick(selectedPresetId)}
+                  className="bg-red-700 hover:bg-red-600 text-white p-2 rounded-lg border border-red-600 transition-colors"
+                  title="Delete Preset"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             )}
-            {dbPresets.filter(p => p.isPublic && p.userId !== user?.id).length > 0 && (
-              <optgroup label="Published by Others">
-                {dbPresets.filter(p => p.isPublic && p.userId !== user?.id).map(p => (
-                  <option key={p.id} value={`db-${p.id}`}>
-                    {p.name} by {p.user?.username || 'Unknown'}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
+          </div>
           <button 
             onClick={() => setShowSavePresetModal(true)}
             aria-label="Save preset"
@@ -1104,56 +1195,6 @@ export function AudioMasteringPlugin() {
             </div>
           </div>
 
-          {FEATURE_HAAS && (
-            <div className={`bg-zinc-800/50 rounded-xl p-4 border ${haasEnabled ? 'border-zinc-700' : 'border-zinc-800 opacity-60'}`}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-zinc-400 text-xs tracking-wider">HAAS</h3>
-                <button
-                  onClick={() => setHaasEnabled(!haasEnabled)}
-                  className={`px-3 py-1 rounded text-xs transition-all ${
-                    haasEnabled 
-                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' 
-                      : 'bg-zinc-700 text-zinc-400'
-                  }`}
-                >
-                  {haasEnabled ? 'ON' : 'OFF'}
-                </button>
-              </div>
-              <div className={`grid grid-cols-2 gap-4 ${!haasEnabled ? 'pointer-events-none opacity-50' : ''}`}>
-                <Knob 
-                  value={haasDelayMs} 
-                  onChange={setHaasDelayMs}
-                  min={0}
-                  max={30}
-                  label="DELAY"
-                  unit="ms"
-                  size="small"
-                />
-                <Knob 
-                  value={haasMix} 
-                  onChange={setHaasMix}
-                  min={0}
-                  max={100}
-                  label="MIX"
-                  unit="%"
-                  size="small"
-                />
-              </div>
-            </div>
-          )}
-
-          {FEATURE_HARMONIZER && (
-            <Harmonizer 
-              enabled={harmonizerEnabled}
-              onToggle={setHarmonizerEnabled}
-              mix={harmonizerMix}
-              setMix={setHarmonizerMix}
-              depth={harmonizerDepth}
-              setDepth={setHarmonizerDepth}
-              tone={harmonizerTone}
-              setTone={setHarmonizerTone}
-            />
-          )}
 
           {FEATURE_REVERB && (
             <Reverb 
@@ -1170,19 +1211,7 @@ export function AudioMasteringPlugin() {
             />
           )}
 
-          {/* Saturation */}
-          <Saturation 
-            enabled={saturationEnabled}
-            onToggle={setSaturationEnabled}
-            drive={saturationDrive}
-            setDrive={setSaturationDrive}
-            mix={saturationMix}
-            setMix={setSaturationMix}
-            bias={saturationBias}
-            setBias={setSaturationBias}
-            mode={saturationMode}
-            setMode={setSaturationMode}
-          />
+
         </div>
       </div>
 
@@ -1197,19 +1226,43 @@ export function AudioMasteringPlugin() {
       {showSavePresetModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-zinc-800 rounded-xl p-6 w-full max-w-md border border-zinc-700">
-            <h2 className="text-zinc-100 mb-4">Save Preset</h2>
-            <input
-              type="text"
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-              placeholder="Preset name"
-              className="w-full bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 mb-4"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSavePreset();
-                }
-              }}
-            />
+            <h2 className="text-zinc-100 mb-4">Simpan Preset</h2>
+            <div className="mb-4">
+              <label className="text-zinc-300 text-sm block mb-2">Nama Preset</label>
+              <input
+                type="text"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="Nama preset"
+                className="w-full bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSavePreset();
+                  }
+                }}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="text-zinc-300 text-sm flex items-center gap-2 mb-2">
+                <Folder className="w-4 h-4" />
+                Folder (opsional)
+              </label>
+              <input
+                type="text"
+                value={presetFolder}
+                onChange={(e) => setPresetFolder(e.target.value)}
+                placeholder="Nama folder"
+                className="w-full bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSavePreset();
+                  }
+                }}
+              />
+              <p className="text-zinc-500 text-xs mt-1">
+                Kosongkan jika tidak ingin menggunakan folder
+              </p>
+            </div>
             <div className="mb-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -1233,17 +1286,139 @@ export function AudioMasteringPlugin() {
                 onClick={handleSavePreset}
                 className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg transition-colors"
               >
-                Save
+                Simpan
               </button>
               <button
                 onClick={() => {
                   setShowSavePresetModal(false);
                   setPresetName('');
+                  setPresetFolder('');
                   setPresetIsPublic(false);
                 }}
                 className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors"
               >
-                Cancel
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Preset Modal */}
+      {showEditPresetModal && editingPresetId && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-zinc-800 rounded-xl p-6 w-full max-w-md border border-zinc-700">
+            <h2 className="text-zinc-100 mb-4">Edit Preset</h2>
+            <div className="mb-4">
+              <label className="text-zinc-300 text-sm block mb-2">Nama Preset</label>
+              <input
+                type="text"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="Nama preset"
+                className="w-full bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleUpdatePreset();
+                  }
+                }}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="text-zinc-300 text-sm flex items-center gap-2 mb-2">
+                <Folder className="w-4 h-4" />
+                Folder (opsional)
+              </label>
+              <input
+                type="text"
+                value={presetFolder}
+                onChange={(e) => setPresetFolder(e.target.value)}
+                placeholder="Nama folder"
+                className="w-full bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleUpdatePreset();
+                  }
+                }}
+              />
+              <p className="text-zinc-500 text-xs mt-1">
+                Kosongkan jika tidak ingin menggunakan folder
+              </p>
+            </div>
+            <div className="mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={presetIsPublic}
+                  onChange={(e) => setPresetIsPublic(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-700 text-cyan-600 focus:ring-cyan-500 focus:ring-2"
+                />
+                <span className="text-zinc-300 text-sm">
+                  Publish preset (dapat digunakan oleh user lain)
+                </span>
+              </label>
+              {presetIsPublic && (
+                <p className="text-zinc-500 text-xs mt-2 ml-6">
+                  Preset yang dipublish akan terlihat dan dapat digunakan oleh semua user
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleUpdatePreset}
+                className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Update
+              </button>
+              <button
+                onClick={() => {
+                  setShowEditPresetModal(false);
+                  setEditingPresetId(null);
+                  setPresetName('');
+                  setPresetFolder('');
+                  setPresetIsPublic(false);
+                }}
+                className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirmModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-zinc-800 rounded-xl p-6 w-full max-w-md border border-zinc-700">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-red-900/30 p-2 rounded-lg">
+                <Trash2 className="w-6 h-6 text-red-400" />
+              </div>
+              <h2 className="text-zinc-100 text-xl font-semibold">Hapus Preset</h2>
+            </div>
+            <p className="text-zinc-300 mb-2">
+              Apakah Anda yakin ingin menghapus preset <span className="font-semibold text-zinc-100">&quot;{deletingPresetName}&quot;</span>?
+            </p>
+            <p className="text-zinc-500 text-sm mb-6">
+              Tindakan ini tidak dapat dibatalkan. Preset akan dihapus secara permanen.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+              >
+                Ya, Hapus
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteConfirmModal(false);
+                  setDeletingPresetId(null);
+                  setDeletingPresetName('');
+                }}
+                className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors"
+              >
+                Batal
               </button>
             </div>
           </div>
@@ -1284,7 +1459,7 @@ export function AudioMasteringPlugin() {
                   setShowChangelog(false);
                   try {
                     if (typeof window !== 'undefined') {
-                      window.localStorage.setItem('CHANGELOG_VIEWED', 'v2.0.0');
+                      window.localStorage.setItem('CHANGELOG_VIEWED', 'v2.1.0');
                     }
                   } catch {
                     // Ignore storage errors
@@ -1297,6 +1472,44 @@ export function AudioMasteringPlugin() {
             </div>
 
             <div className="space-y-4">
+              <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
+                <h3 className="text-blue-400 font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-lg">📁</span> Preset Management dengan Folder
+                </h3>
+                <p className="text-zinc-300 text-sm leading-relaxed mb-2">
+                  Sekarang Anda dapat mengorganisir preset dengan folder! Setiap user memiliki folder sendiri untuk mengelompokkan preset mereka.
+                </p>
+                <ul className="text-zinc-300 text-sm space-y-1 ml-4 list-disc">
+                  <li>Buat folder untuk mengorganisir preset Anda</li>
+                  <li>Preset ditampilkan berdasarkan folder di dropdown</li>
+                  <li>Setiap user hanya bisa mengelola preset mereka sendiri</li>
+                </ul>
+              </div>
+
+              <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4">
+                <h3 className="text-green-400 font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-lg">✏️</span> CRUD Lengkap untuk Preset
+                </h3>
+                <p className="text-zinc-300 text-sm leading-relaxed mb-2">
+                  Sekarang Anda memiliki kontrol penuh atas preset Anda:
+                </p>
+                <ul className="text-zinc-300 text-sm space-y-1 ml-4 list-disc">
+                  <li><span className="font-semibold">Create</span> - Simpan preset dengan folder</li>
+                  <li><span className="font-semibold">Read</span> - Lihat preset yang terorganisir per folder</li>
+                  <li><span className="font-semibold">Update</span> - Edit preset dan folder dengan tombol Edit</li>
+                  <li><span className="font-semibold">Delete</span> - Hapus preset dengan konfirmasi yang jelas</li>
+                </ul>
+              </div>
+
+              <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-4">
+                <h3 className="text-red-400 font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-lg">🗑️</span> Modal Konfirmasi Delete yang Lebih Baik
+                </h3>
+                <p className="text-zinc-300 text-sm leading-relaxed">
+                  Hapus preset sekarang lebih aman dengan modal konfirmasi yang jelas. Anda akan melihat nama preset yang akan dihapus dan peringatan bahwa tindakan ini tidak dapat dibatalkan.
+                </p>
+              </div>
+
               <div className="bg-cyan-900/20 border border-cyan-700/50 rounded-lg p-4">
                 <h3 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
                   <span className="text-lg">✨</span> A/B Comparison Feature
@@ -1319,24 +1532,6 @@ export function AudioMasteringPlugin() {
                   <li><span className="font-semibold">WAV</span> - Multiple quality options (16-bit, 24-bit, 32-bit)</li>
                 </ul>
               </div>
-
-              <div className="bg-purple-900/20 border border-purple-700/50 rounded-lg p-4">
-                <h3 className="text-purple-400 font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-lg">⚡</span> Performance Improvements
-                </h3>
-                <p className="text-zinc-300 text-sm leading-relaxed">
-                  Improved audio processing performance and smoother real-time playback experience.
-                </p>
-              </div>
-
-              <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-4">
-                <h3 className="text-amber-400 font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-lg">🔔</span> Smart Notifications
-                </h3>
-                <p className="text-zinc-300 text-sm leading-relaxed">
-                  Toast notifications now auto-hide automatically. Info notifications disappear after 2.5 seconds, while important messages stay for 4 seconds.
-                </p>
-              </div>
             </div>
 
             <div className="mt-6 pt-4 border-t border-zinc-700">
@@ -1345,7 +1540,7 @@ export function AudioMasteringPlugin() {
                   setShowChangelog(false);
                   try {
                     if (typeof window !== 'undefined') {
-                      window.localStorage.setItem('CHANGELOG_VIEWED', 'v2.0.0');
+                      window.localStorage.setItem('CHANGELOG_VIEWED', 'v2.1.0');
                     }
                   } catch {
                     // Ignore storage errors
@@ -1353,7 +1548,7 @@ export function AudioMasteringPlugin() {
                 }}
                 className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg transition-colors font-medium"
               >
-                Got it!
+                Mengerti!
               </button>
             </div>
           </div>

@@ -89,6 +89,7 @@ export const PresetScalarFieldEnum = {
   id: 'id',
   name: 'name',
   userId: 'userId',
+  folder: 'folder',
   isPublic: 'isPublic',
   settings: 'settings',
   createdAt: 'createdAt',

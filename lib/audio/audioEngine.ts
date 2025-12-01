@@ -17,30 +17,12 @@ export interface AudioEngineSettings {
     enabled: boolean;
     width: number;
   };
-  haas: {
-    enabled: boolean;
-    delayMs: number;
-    mix: number;
-  };
-  harmonizer: {
-    enabled: boolean;
-    mix: number;
-    depth: number;
-    tone: number;
-  };
   reverb: {
     enabled: boolean;
     mix: number;
     size: number;
     decay: number;
     damping: number;
-  };
-  saturation: {
-    enabled: boolean;
-    drive: number;
-    mix: number;
-    bias: number;
-    mode: 'tube' | 'tape' | 'soft';
   };
   multibandCompressor: {
     enabled: boolean;
@@ -98,31 +80,6 @@ export class AudioEngine {
   private reverbMix: GainNode | null = null;
   private reverbBypass: GainNode | null = null;
   private reverbOutput: GainNode | null = null;
-  private saturationNode: WaveShaperNode | null = null;
-  private saturationDryGain: GainNode | null = null;
-  private saturationWetGain: GainNode | null = null;
-  // Saturation filtering nodes for professional analog modeling
-  private saturationDCBlocker: BiquadFilterNode | null = null;
-  private saturationPreEmphasis: BiquadFilterNode | null = null;
-  private saturationDeEmphasis: BiquadFilterNode | null = null;
-  private saturationPreGain: GainNode | null = null;
-  private saturationPostHPF: BiquadFilterNode | null = null;
-  private saturationPostHighShelf: BiquadFilterNode | null = null;
-  private saturationPostLPF: BiquadFilterNode | null = null;
-  private saturationCeilGain: GainNode | null = null;
-  // Harmonizer nodes
-  private harmonizerDelay1: DelayNode | null = null;
-  private harmonizerDelay2: DelayNode | null = null;
-  private harmonizerLFO1: OscillatorNode | null = null;
-  private harmonizerLFO2: OscillatorNode | null = null;
-  private harmonizerLFOGain1: GainNode | null = null;
-  private harmonizerLFOGain2: GainNode | null = null;
-  private harmonizerDryGain: GainNode | null = null;
-  private harmonizerWetGain: GainNode | null = null;
-  private harmonizerToneFilter: BiquadFilterNode | null = null;
-  private harmonizerMix: GainNode | null = null;
-  private harmonizerBypass: GainNode | null = null;
-  private harmonizerOutput: GainNode | null = null;
   private splitterNode: ChannelSplitterNode | null = null;
   private mergerNode: ChannelMergerNode | null = null;
   private stereoMidGain: GainNode | null = null;
@@ -133,18 +90,6 @@ export class AudioEngine {
   private stereoLeftCrossfeed: GainNode | null = null;
   private stereoRightCrossfeed: GainNode | null = null;
   private stereoOutput: GainNode | null = null;
-  // Haas widener nodes
-  private haasSplitter: ChannelSplitterNode | null = null;
-  private haasMerger: ChannelMergerNode | null = null;
-  private haasLeftDelay: DelayNode | null = null;
-  private haasRightDelay: DelayNode | null = null;
-  private haasLeftDry: GainNode | null = null;
-  private haasRightDry: GainNode | null = null;
-  private haasLeftWet: GainNode | null = null;
-  private haasRightWet: GainNode | null = null;
-  private haasMix: GainNode | null = null;
-  private haasBypass: GainNode | null = null;
-  private haasOutput: GainNode | null = null;
   // Master fade gain (untuk kontrol manual fade in/out pada playback)
   private masterFade: GainNode | null = null;
   private multibandFilters: Array<{
@@ -160,9 +105,6 @@ export class AudioEngine {
   private compressorMix: GainNode | null = null;
   private compressorBypass: GainNode | null = null;
   private compressorOutput: GainNode | null = null;
-  private saturationMix: GainNode | null = null;
-  private saturationBypass: GainNode | null = null;
-  private saturationOutput: GainNode | null = null;
   private limiterMix: GainNode | null = null;
   private limiterBypass: GainNode | null = null;
   private limiterOutput: GainNode | null = null;
@@ -171,8 +113,6 @@ export class AudioEngine {
   private masterBypass: GainNode | null = null;
   private masterMix: GainNode | null = null;
   private masterOutput: GainNode | null = null;
-  // Precomputed curves cache
-  private saturationCurveCache: Map<string, Float32Array> = new Map();
   // Gain reduction tracking
   private gainReductionCallback: ((reduction: number) => void) | null = null;
   private gainReductionFrameId: number | null = null;
@@ -354,32 +294,6 @@ export class AudioEngine {
     this.reverbMix = null;
     this.reverbBypass = null;
     this.reverbOutput = null;
-    this.saturationNode = null;
-    this.saturationDryGain = null;
-    this.saturationWetGain = null;
-    this.saturationDCBlocker = null;
-    this.saturationPreEmphasis = null;
-    this.saturationDeEmphasis = null;
-    this.saturationPreGain = null;
-    this.saturationPostHPF = null;
-    this.saturationPostHighShelf = null;
-    this.saturationPostLPF = null;
-    this.saturationCeilGain = null;
-    this.saturationMix = null;
-    this.saturationBypass = null;
-    this.saturationOutput = null;
-    this.harmonizerDelay1 = null;
-    this.harmonizerDelay2 = null;
-    this.harmonizerLFO1 = null;
-    this.harmonizerLFO2 = null;
-    this.harmonizerLFOGain1 = null;
-    this.harmonizerLFOGain2 = null;
-    this.harmonizerDryGain = null;
-    this.harmonizerWetGain = null;
-    this.harmonizerToneFilter = null;
-    this.harmonizerMix = null;
-    this.harmonizerBypass = null;
-    this.harmonizerOutput = null;
     this.splitterNode = null;
     this.mergerNode = null;
     this.stereoMidGain = null;
@@ -389,17 +303,6 @@ export class AudioEngine {
     this.stereoLeftCrossfeed = null;
     this.stereoRightCrossfeed = null;
     this.stereoOutput = null;
-    this.haasSplitter = null;
-    this.haasMerger = null;
-    this.haasLeftDelay = null;
-    this.haasRightDelay = null;
-    this.haasLeftDry = null;
-    this.haasRightDry = null;
-    this.haasLeftWet = null;
-    this.haasRightWet = null;
-    this.haasMix = null;
-    this.haasBypass = null;
-    this.haasOutput = null;
     this.limiterNode = null;
     this.limiterMix = null;
     this.limiterBypass = null;
@@ -416,7 +319,7 @@ export class AudioEngine {
   }
 
   // Build audio graph sekali saja (dipanggil saat file loaded)
-  private buildAudioGraph(settings: AudioEngineSettings): void {
+  private async buildAudioGraph(settings: AudioEngineSettings): Promise<void> {
     if (!this.audioContext || !this.audioBuffer) {
       throw new Error('Audio context or buffer not initialized');
     }
@@ -452,23 +355,8 @@ export class AudioEngine {
     // Reverb setup
     this.setupReverb(settings.reverb);
 
-    // Saturation (using precomputed curve)
-    this.createSaturationNode(settings.saturation);
-
-    this.saturationMix = this.audioContext.createGain();
-    this.saturationBypass = this.audioContext.createGain();
-    this.saturationMix.gain.value = settings.saturation.enabled ? 1 : 0;
-    this.saturationBypass.gain.value = settings.saturation.enabled ? 0 : 1;
-    this.saturationOutput = this.audioContext.createGain();
-
-    // Harmonizer setup (delay-based chorus effect)
-    this.setupHarmonizer(settings.harmonizer);
-
     // Stereo width
     this.setupStereoWidth(settings.stereoWidth.width);
-
-    // Haas widener
-    this.setupHaas(settings.haas);
 
     // Limiter (optimized for professional mastering)
     // Using higher ratio and optimized attack/release for smooth limiting
@@ -567,92 +455,18 @@ export class AudioEngine {
     this.reverbMix!.connect(this.reverbOutput!);
     this.reverbBypass!.connect(this.reverbOutput!);
 
-    // Saturation dengan crossfade internal: Input → PreGain → WaveShaper → Mix → PostFilters → Output
-    const saturationInput = this.reverbOutput!;
-    if (this.saturationNode && this.saturationWetGain && this.saturationDryGain && this.saturationPreGain) {
-      // Input menuju PreGain
-      saturationInput.connect(this.saturationPreGain);
-
-      // Dry mengambil dari PreGain (fase identik)
-      this.saturationPreGain.connect(this.saturationDryGain);
-
-      // Wet: PreGain → WaveShaper
-      this.saturationPreGain.connect(this.saturationNode);
-      this.saturationNode.connect(this.saturationWetGain);
-
-      // Campurkan wet/dry
-      const saturationMixNode = this.audioContext.createGain();
-      this.saturationWetGain.connect(saturationMixNode);
-      this.saturationDryGain.connect(saturationMixNode);
-      saturationMixNode.connect(this.saturationMix!);
-
-      if (this.saturationCeilGain) {
-        this.saturationMix!.connect(this.saturationCeilGain);
-        if (this.saturationPostHPF && this.saturationPostLPF && this.saturationPostHighShelf) {
-          this.saturationCeilGain.connect(this.saturationPostHPF);
-          this.saturationPostHPF.connect(this.saturationPostLPF);
-          this.saturationPostLPF.connect(this.saturationPostHighShelf);
-          this.saturationPostHighShelf.connect(this.saturationOutput!);
-        } else {
-          this.saturationCeilGain.connect(this.saturationOutput!);
-        }
-      } else {
-        this.saturationMix!.connect(this.saturationOutput!);
-      }
-    } else {
-      saturationInput.connect(this.saturationMix!);
-      if (this.saturationCeilGain) {
-        this.saturationMix!.connect(this.saturationCeilGain);
-        this.saturationCeilGain.connect(this.saturationOutput!);
-      } else {
-        this.saturationMix!.connect(this.saturationOutput!);
-      }
-    }
-    saturationInput.connect(this.saturationBypass!);
-    this.saturationBypass!.connect(this.saturationOutput!);
-
-    // Harmonizer with bypass (delay-based chorus effect)
-    if (settings.harmonizer.enabled &&
-      this.harmonizerDelay1 &&
-      this.harmonizerDelay2 &&
-      this.harmonizerDryGain &&
-      this.harmonizerWetGain &&
-      this.harmonizerToneFilter) {
-      // Connect input to delays and dry path
-      this.saturationOutput!.connect(this.harmonizerDelay1);
-      this.saturationOutput!.connect(this.harmonizerDelay2);
-      this.saturationOutput!.connect(this.harmonizerDryGain);
-
-      // Process delayed signals through tone filter (sum both delays)
-      const delaySum = this.audioContext.createGain();
-      this.harmonizerDelay1.connect(delaySum);
-      this.harmonizerDelay2.connect(delaySum);
-      delaySum.connect(this.harmonizerToneFilter);
-      this.harmonizerToneFilter.connect(this.harmonizerWetGain);
-
-      // Mix dry and wet
-      const harmonizerMixNode = this.audioContext.createGain();
-      this.harmonizerDryGain.connect(harmonizerMixNode);
-      this.harmonizerWetGain.connect(harmonizerMixNode);
-      harmonizerMixNode.connect(this.harmonizerMix!);
-    } else {
-      this.saturationOutput!.connect(this.harmonizerMix!);
-    }
-    this.saturationOutput!.connect(this.harmonizerBypass!);
-    this.harmonizerMix!.connect(this.harmonizerOutput!);
-    this.harmonizerBypass!.connect(this.harmonizerOutput!);
-
     // Stereo Width - always route through stereo processing if stereo audio
     // This ensures routing is always correct even when enabled state changes
-    let stereoInput: GainNode = this.harmonizerOutput!;
+    const stereoInputSource = this.reverbOutput!;
+    let stereoInput: GainNode = stereoInputSource;
 
     // Only apply stereo width if audio is stereo (2+ channels)
     if (this.audioBuffer &&
       this.audioBuffer.numberOfChannels >= 2 &&
       this.splitterNode &&
       this.mergerNode) {
-      // Always connect harmonizer output to splitter (routing always ready)
-      this.harmonizerOutput!.connect(this.splitterNode);
+      // Always connect stereo input source to splitter (routing always ready)
+      stereoInputSource.connect(this.splitterNode);
 
       // Create gain nodes for proper stereo width processing (save as instance variables)
       // These are created once and reused
@@ -712,42 +526,13 @@ export class AudioEngine {
           this.stereoRightCrossfeed.gain.value = 0;
         }
         // Still use stereo output (it will pass through unchanged)
-        stereoInput = this.stereoOutput || this.harmonizerOutput!;
+        stereoInput = this.stereoOutput || stereoInputSource;
       }
     }
 
-    // Haas widener with bypass (always connect when stereo nodes exist)
-    let spatialInput: GainNode = stereoInput;
-    if (this.audioBuffer && this.audioBuffer.numberOfChannels >= 2 && this.haasSplitter && this.haasMerger && this.haasMix && this.haasBypass && this.haasOutput && this.haasLeftDelay && this.haasRightDelay && this.haasLeftDry && this.haasRightDry && this.haasLeftWet && this.haasRightWet) {
-      stereoInput.connect(this.haasSplitter);
-      this.haasSplitter.connect(this.haasLeftDry, 0);
-      this.haasSplitter.connect(this.haasLeftDelay, 0);
-      this.haasLeftDelay.connect(this.haasLeftWet);
-      this.haasSplitter.connect(this.haasRightDry, 1);
-      this.haasSplitter.connect(this.haasRightDelay, 1);
-      this.haasRightDelay.connect(this.haasRightWet);
-
-      const haasLeftSum = this.audioContext!.createGain();
-      const haasRightSum = this.audioContext!.createGain();
-      this.haasLeftDry.connect(haasLeftSum);
-      this.haasLeftWet.connect(haasLeftSum);
-      this.haasRightDry.connect(haasRightSum);
-      this.haasRightWet.connect(haasRightSum);
-
-      haasLeftSum.connect(this.haasMerger, 0, 0);
-      haasRightSum.connect(this.haasMerger, 0, 1);
-
-      this.haasMerger.connect(this.haasMix);
-      stereoInput.connect(this.haasBypass);
-      this.haasMix.connect(this.haasOutput);
-      this.haasBypass.connect(this.haasOutput);
-
-      spatialInput = this.haasOutput;
-    }
-
     // Limiter with bypass
-    spatialInput.connect(this.limiterNode!);
-    spatialInput.connect(this.limiterBypass!);
+    stereoInput.connect(this.limiterNode!);
+    stereoInput.connect(this.limiterBypass!);
     this.limiterNode!.connect(this.limiterMix!);
     this.limiterMix!.connect(this.limiterOutput!);
     this.limiterBypass!.connect(this.limiterOutput!);
@@ -774,14 +559,14 @@ export class AudioEngine {
   }
 
   // Setup audio chain untuk playback (hanya create source node, graph sudah ada)
-  setupAudioChain(settings: AudioEngineSettings): void {
+  async setupAudioChain(settings: AudioEngineSettings): Promise<void> {
     if (!this.audioContext || !this.audioBuffer) {
       throw new Error('Audio context or buffer not initialized');
     }
 
     // Jika graph belum dibangun, build sekarang
     if (!this.audioGraphBuilt) {
-      this.buildAudioGraph(settings);
+      await this.buildAudioGraph(settings);
       this.audioGraphBuilt = true;
     }
 
@@ -860,319 +645,9 @@ export class AudioEngine {
     this.currentSettings.reverb = { ...settings };
   }
 
-  /**
-   * Setup Haas widener nodes
-   */
-  private setupHaas(settings: { enabled: boolean; delayMs: number; mix: number }): void {
-    if (!this.audioContext) return;
 
-    this.haasSplitter = this.audioContext.createChannelSplitter(2);
-    this.haasMerger = this.audioContext.createChannelMerger(2);
 
-    this.haasLeftDelay = this.audioContext.createDelay(0.05);
-    this.haasRightDelay = this.audioContext.createDelay(0.05);
-    const delaySec = Math.min(0.03, Math.max(0, settings.delayMs / 1000));
-    this.haasLeftDelay.delayTime.value = 0;
-    this.haasRightDelay.delayTime.value = delaySec;
 
-    this.haasLeftDry = this.audioContext.createGain();
-    this.haasRightDry = this.audioContext.createGain();
-    this.haasLeftWet = this.audioContext.createGain();
-    this.haasRightWet = this.audioContext.createGain();
-
-    const wet = settings.mix / 100;
-    const dry = 1 - wet;
-    this.haasLeftDry.gain.value = dry;
-    this.haasRightDry.gain.value = dry;
-    this.haasLeftWet.gain.value = wet;
-    this.haasRightWet.gain.value = wet;
-
-    this.haasMix = this.audioContext.createGain();
-    this.haasBypass = this.audioContext.createGain();
-    this.haasMix.gain.value = settings.enabled ? 1 : 0;
-    this.haasBypass.gain.value = settings.enabled ? 0 : 1;
-    this.haasOutput = this.audioContext.createGain();
-
-    this.currentSettings.haas = { ...settings };
-  }
-
-  /**
-   * Membuat node saturasi dengan kontrol drive/mix/bias dan mode.
-   * Untuk mencegah artefak flanger/comb-filter saat mix < 100% pada mode 'tape',
-   * pre/de-emphasis akan dinonaktifkan sehingga fase wet/dry tetap selaras.
-   */
-  /**
-   * Algoritma saturasi dengan mode tube/tape/soft;
-   * mencakup kompensasi gain berbasis RMS untuk level yang konsisten.
-   */
-  private createSaturationNode(settings: { drive: number; mix: number; bias: number; mode: 'tube' | 'tape' | 'soft' }): WaveShaperNode {
-    if (!this.audioContext) {
-      throw new Error('Audio context not initialized');
-    }
-
-    // Create DC blocking filter (highpass at 20Hz)
-    // This removes DC offset that can be introduced by saturation
-    this.saturationDCBlocker = this.audioContext.createBiquadFilter();
-    this.saturationDCBlocker.type = 'highpass';
-    this.saturationDCBlocker.frequency.value = 20;
-    this.saturationDCBlocker.Q.value = 0.707; // Butterworth response
-
-    // Create pre-emphasis filter untuk tape mode
-    // Boosts high frequencies before saturation (like real tape machines)
-    this.saturationPreEmphasis = this.audioContext.createBiquadFilter();
-    this.saturationPreEmphasis.type = 'highshelf';
-    this.saturationPreEmphasis.frequency.value = 3000; // 3kHz
-    this.saturationPreEmphasis.Q.value = 0.707;
-
-    // Create de-emphasis filter for tape mode
-    // Cuts high frequencies after saturation to compensate pre-emphasis
-    this.saturationDeEmphasis = this.audioContext.createBiquadFilter();
-    this.saturationDeEmphasis.type = 'highshelf';
-    this.saturationDeEmphasis.frequency.value = 3000; // 3kHz
-    this.saturationDeEmphasis.Q.value = 0.707;
-
-    // Set pre/de-emphasis gains berdasarkan mode
-    if (settings.mode === 'tape') {
-      const isFullWet = settings.mix >= 100;
-      // Aktifkan pre/de-emphasis hanya saat full wet untuk mencegah perbedaan fase saat di-blend
-      this.saturationPreEmphasis.gain.value = isFullWet ? 6 : 0;
-      this.saturationDeEmphasis.gain.value = isFullWet ? -6 : 0;
-    } else {
-      // Mode selain 'tape': bypass pre/de-emphasis
-      this.saturationPreEmphasis.gain.value = 0;
-      this.saturationDeEmphasis.gain.value = 0;
-    }
-
-    this.saturationNode = this.audioContext.createWaveShaper();
-    const drive = settings.drive / 100;
-    const bias = settings.bias / 100;
-    const mixValue = settings.mix / 100;
-    const size = 65536;
-    const curve = new Float32Array(size);
-    // Soft mode: gunakan ceiling sedikit lebih rendah, tapi tetap cukup lebar untuk headroom
-    const hardLimit = settings.mode === 'soft' ? 0.9 : 0.98;
-    let sumInSq = 0;
-    let sumOutSq = 0;
-
-    for (let i = 0; i < size; i++) {
-      const x = (i - 32768) / 32768;
-      let saturated: number;
-
-      // Professional analog saturation modeling with improved transfer functions
-      switch (settings.mode) {
-        case 'tube':
-          // Tube/Valve saturation modeling (Triode/Pentode characteristic)
-          // Asymmetric soft clipping with even and odd harmonics
-          // Models classic tube warmth with smooth compression
-          const tubeGain = 1 + drive * 4.0; // Increased range for more character
-          const tubeInput = x * tubeGain;
-
-          // Asymmetric tube transfer function (models grid current)
-          // Positive half: softer saturation (triode characteristic)
-          // Negative half: harder saturation (asymmetric clipping)
-          if (tubeInput >= 0) {
-            // Positive: smooth tanh with slight compression
-            saturated = Math.tanh(tubeInput * 0.9) * 1.05;
-          } else {
-            // Negative: harder clipping (asymmetric)
-            saturated = Math.tanh(tubeInput * 1.1) * 0.95;
-          }
-
-          // Add harmonic richness with subtle second-order distortion
-          saturated += Math.sin(tubeInput * Math.PI * 0.5) * 0.05 * drive;
-
-          // Tube bias (DC offset) - characteristic of tube circuits
-          saturated += bias * 0.12;
-          break;
-
-        case 'tape':
-          // Analog tape saturation modeling (based on magnetic hysteresis)
-          // Smooth compression with tape-like warmth and high-frequency rolloff
-          const tapeGain = 1 + drive * 3.5;
-          const tapeInput = x * tapeGain;
-
-          // Tape hysteresis curve (S-curve with smooth compression)
-          // Uses modified arctan for tape-like response
-          const tapeBase = (2 / Math.PI) * Math.atan(tapeInput * Math.PI / 2);
-
-          // Add tape compression characteristic (soft knee)
-          const tapeCompression = tapeInput / (1 + Math.abs(tapeInput) * 0.5);
-
-          // Blend for realistic tape response
-          saturated = tapeBase * 0.7 + tapeCompression * 0.3;
-
-          // Add subtle third-harmonic for tape warmth
-          saturated += Math.sin(tapeInput * Math.PI) * 0.03 * drive;
-
-          // Tape bias (pre-magnetization)
-          saturated += bias * 0.1;
-          break;
-
-        case 'soft':
-        default:
-          // Soft saturation: simple analog-style tanh (paling halus, tanpa pecah/kasar)
-          // Drive mengatur seberapa keras sinyal mendorong tanh
-          {
-            const softGain = 1 + drive * 2.0;
-            const biased = x + bias * 0.15; // sedikit bias seperti analog, tapi tidak berlebihan
-            const input = biased * softGain;
-            // Satu kurva tanh yang smooth, tanpa piecewise polynomial
-            saturated = Math.tanh(input);
-          }
-          break;
-      }
-
-      // Blend saturasi dengan sinyal original di dalam kurva (seri-style)
-      const blended = x + mixValue * (saturated - x);
-
-      // Clamp untuk mencegah clipping/crackle, limit disesuaikan mode
-      const y = Math.max(-hardLimit, Math.min(hardLimit, blended));
-      curve[i] = y;
-      sumInSq += x * x;
-      sumOutSq += y * y;
-    }
-
-    const rmsIn = Math.sqrt(sumInSq / size);
-    const rmsOut = Math.sqrt(sumOutSq / size);
-    let compensation = rmsOut > 0 ? rmsIn / rmsOut : 1;
-    // Auto-gain: jaga level relatif konsisten tapi jangan terlalu agresif
-    compensation = Math.min(1.2, Math.max(0.5, compensation));
-    if (settings.mode === 'soft') {
-      // Soft: sedikit lebih kalem supaya tidak mengangkat peak berlebihan
-      compensation = Math.min(compensation, 0.9);
-    }
-
-    for (let i = 0; i < size; i++) {
-      curve[i] = Math.max(-0.98, Math.min(0.98, curve[i] * compensation));
-    }
-
-    this.saturationNode.curve = curve;
-    // Soft mode tetap pakai 4x oversampling untuk mengurangi aliasing/crackle
-    this.saturationNode.oversample = (settings.mode === 'soft' || settings.mix >= 100 ? '4x' : 'none');
-
-    // Mix control with proper gain staging
-    this.saturationDryGain = this.audioContext.createGain();
-    this.saturationWetGain = this.audioContext.createGain();
-    // Pre-gain untuk jalur Input → WaveShaper
-    this.saturationPreGain = this.audioContext.createGain();
-    // Kembalikan ke 1.0 supaya bentuk kurva sama seperti sebelumnya
-    this.saturationPreGain.gain.value = 1.0;
-
-    // Post filter setelah mix untuk tone analog dan bebas fase
-    this.saturationPostHPF = this.audioContext.createBiquadFilter();
-    this.saturationPostHPF.type = 'highpass';
-    this.saturationPostHPF.frequency.value = 20;
-    this.saturationPostHPF.Q.value = 0.707;
-
-    this.saturationPostLPF = this.audioContext.createBiquadFilter();
-    this.saturationPostLPF.type = 'lowpass';
-    // Kembalikan LPF soft ke 14k agar karakter high-end tidak berubah banyak
-    this.saturationPostLPF.frequency.value = (settings.mode === 'soft' ? 14000 : 16000);
-    this.saturationPostLPF.Q.value = 0.707;
-
-    this.saturationPostHighShelf = this.audioContext.createBiquadFilter();
-    this.saturationPostHighShelf.type = 'highshelf';
-    this.saturationPostHighShelf.frequency.value = 6000;
-    this.saturationPostHighShelf.Q.value = 0.707;
-    switch (settings.mode) {
-      case 'tape':
-        this.saturationPostHighShelf.gain.value = -4;
-        break;
-      case 'tube':
-        this.saturationPostHighShelf.gain.value = -2;
-        break;
-      case 'soft':
-      default:
-        // Soft: biarkan netral (0 dB) supaya tidak terasa seperti chorus/phasey
-        this.saturationPostHighShelf.gain.value = -5;
-        break;
-    }
-
-    // Semua mode: gunakan hanya jalur wet (seri-style), dry = 0 untuk menghindari comb/chorus
-    const dryGain = 0;
-    const wetGain = 1;
-
-    this.saturationDryGain.gain.value = dryGain;
-    this.saturationWetGain.gain.value = wetGain;
-
-    this.saturationCeilGain = this.audioContext.createGain();
-    if (settings.mode === 'soft') {
-      const sumWeights = dryGain + wetGain;
-      const targetPeak = 0.9;
-      const ceil = Math.min(1.0, targetPeak / Math.max(0.001, sumWeights));
-      this.saturationCeilGain.gain.value = ceil;
-    } else {
-      this.saturationCeilGain.gain.value = 1.0;
-    }
-
-    return this.saturationNode;
-  }
-
-  private setupHarmonizer(settings: { enabled: boolean; mix: number; depth: number; tone: number }): void {
-    if (!this.audioContext) return;
-
-    // Harmonizer menggunakan delay-based chorus effect
-    // Depth mengontrol modulasi depth, mix mengontrol wet/dry mix
-    // Tone mengontrol filter frequency untuk tone shaping
-
-    // Base delay time (sekitar 5-20ms untuk chorus effect)
-    const baseDelay = 0.010; // 10ms
-
-    // Create two delay lines dengan LFO modulation untuk chorus effect
-    this.harmonizerDelay1 = this.audioContext.createDelay(0.05);
-    this.harmonizerDelay2 = this.audioContext.createDelay(0.05);
-    this.harmonizerDelay1.delayTime.value = baseDelay;
-    this.harmonizerDelay2.delayTime.value = baseDelay * 1.5; // Slightly different delay
-
-    // LFO untuk modulasi delay time (chorus effect)
-    this.harmonizerLFO1 = this.audioContext.createOscillator();
-    this.harmonizerLFO1.type = 'sine';
-    this.harmonizerLFO1.frequency.value = 0.5 + (settings.depth / 100 * 2); // 0.5-2.5 Hz
-
-    this.harmonizerLFO2 = this.audioContext.createOscillator();
-    this.harmonizerLFO2.type = 'sine';
-    this.harmonizerLFO2.frequency.value = 0.7 + (settings.depth / 100 * 1.8); // Slightly different frequency
-
-    // LFO gain untuk modulasi depth
-    const modulationDepth = (settings.depth / 100) * 0.005; // Max 5ms modulation
-    this.harmonizerLFOGain1 = this.audioContext.createGain();
-    this.harmonizerLFOGain1.gain.value = modulationDepth;
-    this.harmonizerLFOGain2 = this.audioContext.createGain();
-    this.harmonizerLFOGain2.gain.value = modulationDepth;
-
-    // Connect LFO to delay time modulation
-    this.harmonizerLFO1.connect(this.harmonizerLFOGain1);
-    this.harmonizerLFO2.connect(this.harmonizerLFOGain2);
-    this.harmonizerLFOGain1.connect(this.harmonizerDelay1.delayTime);
-    this.harmonizerLFOGain2.connect(this.harmonizerDelay2.delayTime);
-
-    // Start LFO oscillators
-    this.harmonizerLFO1.start();
-    this.harmonizerLFO2.start();
-
-    // Tone filter untuk tone shaping
-    this.harmonizerToneFilter = this.audioContext.createBiquadFilter();
-    this.harmonizerToneFilter.type = 'peaking';
-    this.harmonizerToneFilter.frequency.value = 2000 + (settings.tone / 100 * 3000); // 2-5kHz
-    this.harmonizerToneFilter.Q.value = 1;
-    this.harmonizerToneFilter.gain.value = settings.tone / 10; // -10 to +10 dB
-
-    // Dry/wet mix
-    this.harmonizerDryGain = this.audioContext.createGain();
-    this.harmonizerWetGain = this.audioContext.createGain();
-    this.harmonizerDryGain.gain.value = 1 - (settings.mix / 100);
-    this.harmonizerWetGain.gain.value = settings.mix / 100;
-
-    // Bypass nodes
-    this.harmonizerMix = this.audioContext.createGain();
-    this.harmonizerBypass = this.audioContext.createGain();
-    this.harmonizerMix.gain.value = settings.enabled ? 1 : 0;
-    this.harmonizerBypass.gain.value = settings.enabled ? 0 : 1;
-    this.harmonizerOutput = this.audioContext.createGain();
-
-    // Update current settings
-    this.currentSettings.harmonizer = { ...settings };
-  }
 
   private setupStereoWidth(width: number): void {
     if (!this.audioContext) return;
@@ -1272,7 +747,7 @@ export class AudioEngine {
     });
   }
 
-  play(): void {
+  async play(): Promise<void> {
     if (!this.audioContext || !this.audioBuffer) {
       throw new Error('Audio not loaded');
     }
@@ -1288,7 +763,7 @@ export class AudioEngine {
 
     // Pastikan graph sudah dibangun
     if (!this.audioGraphBuilt) {
-      this.buildAudioGraph(this.getCurrentSettings());
+      await this.buildAudioGraph(this.getCurrentSettings());
       this.audioGraphBuilt = true;
     }
 
@@ -2002,154 +1477,6 @@ export class AudioEngine {
       }
     }
 
-    // Update saturation parameters
-    if (settings.saturation && this.saturationNode) {
-      if (settings.saturation.drive !== undefined ||
-        settings.saturation.bias !== undefined ||
-        settings.saturation.mode !== undefined ||
-        settings.saturation.mix !== undefined) {
-        const drive = (settings.saturation.drive ?? this.currentSettings.saturation.drive);
-        const bias = (settings.saturation.bias ?? this.currentSettings.saturation.bias);
-        const mode = (settings.saturation.mode ?? this.currentSettings.saturation.mode);
-        const mix = (settings.saturation.mix ?? this.currentSettings.saturation.mix);
-        const cacheKey = `${mode}_${Math.round(drive)}_${Math.round(bias)}_${Math.round(mix)}`;
-        let curve = this.saturationCurveCache.get(cacheKey);
-
-        if (!curve) {
-          const driveValue = drive / 100;
-          const biasValue = bias / 100;
-          const mixValue = mix / 100;
-          curve = new Float32Array(65536);
-
-          // Calculate auto gain compensation
-          const autoGainCompensation = 1 / (1 + driveValue * 0.5);
-
-          for (let i = 0; i < 65536; i++) {
-            const x = (i - 32768) / 32768;
-            let saturated: number;
-
-            // Professional analog saturation modeling (same as createSaturationNode)
-            switch (mode) {
-              case 'tube':
-                // Tube/Valve saturation modeling
-                const tubeGain = 1 + driveValue * 4.0;
-                const tubeInput = x * tubeGain;
-
-                if (tubeInput >= 0) {
-                  saturated = Math.tanh(tubeInput * 0.9) * 1.05;
-                } else {
-                  saturated = Math.tanh(tubeInput * 1.1) * 0.95;
-                }
-
-                saturated += Math.sin(tubeInput * Math.PI * 0.5) * 0.05 * driveValue;
-                saturated += biasValue * 0.12;
-                break;
-
-              case 'tape':
-                // Analog tape saturation modeling
-                const tapeGain = 1 + driveValue * 3.5;
-                const tapeInput = x * tapeGain;
-
-                const tapeBase = (2 / Math.PI) * Math.atan(tapeInput * Math.PI / 2);
-                const tapeCompression = tapeInput / (1 + Math.abs(tapeInput) * 0.5);
-
-                saturated = tapeBase * 0.7 + tapeCompression * 0.3;
-                saturated += Math.sin(tapeInput * Math.PI) * 0.03 * driveValue;
-                saturated += biasValue * 0.1;
-                break;
-
-              case 'soft':
-              default:
-                // Soft saturation: samakan dengan createSaturationNode (simple tanh analog-style)
-                {
-                  const softGain = 1 + driveValue * 2.0;
-                  const biased = x + biasValue * 0.15;
-                  const input = biased * softGain;
-                  saturated = Math.tanh(input);
-                }
-                break;
-            }
-
-            // Blend saturasi dengan sinyal original di dalam kurva (seri-style)
-            const blended = x + mixValue * (saturated - x);
-
-            // Apply auto gain compensation
-            const compensated = blended * autoGainCompensation;
-
-            // Clamp to prevent clipping
-            curve[i] = Math.max(-0.98, Math.min(0.98, compensated));
-          }
-
-          // Cache curve
-          if (this.saturationCurveCache.size > 50) {
-            const firstKey = this.saturationCurveCache.keys().next().value;
-            if (firstKey) {
-              this.saturationCurveCache.delete(firstKey);
-            }
-          }
-          this.saturationCurveCache.set(cacheKey, curve);
-        }
-
-        if (this.saturationNode && curve) {
-          // Create new Float32Array from cached curve to ensure proper type
-          this.saturationNode.curve = new Float32Array(curve);
-        }
-
-        // Update pre/de-emphasis filters based on mode
-        if (this.saturationPreEmphasis && this.saturationDeEmphasis) {
-          if (mode === 'tape') {
-            // Tape mode: gunakan pre/de-emphasis hanya saat mix full untuk mencegah artefak fase
-            const isFullWet = (settings.saturation.mix ?? this.currentSettings.saturation.mix) >= 100;
-            this.saturationPreEmphasis.gain.setValueAtTime(isFullWet ? 6 : 0, now); // +6dB boost
-            this.saturationDeEmphasis.gain.setValueAtTime(isFullWet ? -6 : 0, now); // -6dB cut
-          } else {
-            // Mode lain: bypass pre/de-emphasis
-            this.saturationPreEmphasis.gain.setValueAtTime(0, now);
-            this.saturationDeEmphasis.gain.setValueAtTime(0, now);
-          }
-        }
-      }
-      if (this.saturationWetGain && this.saturationDryGain && settings.saturation.mix !== undefined) {
-        // Jalur dry dimatikan untuk semua mode agar tidak ada comb/chorus,
-        // mix di-handle langsung di kurva (createSaturationNode / cache).
-        this.saturationDryGain.gain.setValueAtTime(0, now);
-        this.saturationWetGain.gain.setValueAtTime(1, now);
-      }
-      if (settings.saturation.enabled !== undefined && this.saturationMix && this.saturationBypass) {
-        this.saturationMix.gain.setValueAtTime(settings.saturation.enabled ? 1 : 0, now);
-        this.saturationBypass.gain.setValueAtTime(settings.saturation.enabled ? 0 : 1, now);
-      }
-    }
-
-    // Update harmonizer parameters
-    if (settings.harmonizer) {
-      if (settings.harmonizer.enabled !== undefined && this.harmonizerMix && this.harmonizerBypass) {
-        this.harmonizerMix.gain.setValueAtTime(settings.harmonizer.enabled ? 1 : 0, now);
-        this.harmonizerBypass.gain.setValueAtTime(settings.harmonizer.enabled ? 0 : 1, now);
-      }
-      if (this.harmonizerDryGain && this.harmonizerWetGain && settings.harmonizer.mix !== undefined) {
-        this.harmonizerDryGain.gain.setValueAtTime(1 - (settings.harmonizer.mix / 100), now);
-        this.harmonizerWetGain.gain.setValueAtTime(settings.harmonizer.mix / 100, now);
-      }
-      if (this.harmonizerLFO1 && this.harmonizerLFO2 && settings.harmonizer.depth !== undefined) {
-        // Update LFO frequency based on depth
-        const lfoFreq1 = 0.5 + (settings.harmonizer.depth / 100 * 2);
-        const lfoFreq2 = 0.7 + (settings.harmonizer.depth / 100 * 1.8);
-        this.harmonizerLFO1.frequency.setValueAtTime(lfoFreq1, now);
-        this.harmonizerLFO2.frequency.setValueAtTime(lfoFreq2, now);
-      }
-      if (this.harmonizerLFOGain1 && this.harmonizerLFOGain2 && settings.harmonizer.depth !== undefined) {
-        // Update modulation depth
-        const modulationDepth = (settings.harmonizer.depth / 100) * 0.005;
-        this.harmonizerLFOGain1.gain.setValueAtTime(modulationDepth, now);
-        this.harmonizerLFOGain2.gain.setValueAtTime(modulationDepth, now);
-      }
-      if (this.harmonizerToneFilter && settings.harmonizer.tone !== undefined) {
-        this.harmonizerToneFilter.frequency.setValueAtTime(2000 + (settings.harmonizer.tone / 100 * 3000), now);
-        this.harmonizerToneFilter.gain.setValueAtTime(settings.harmonizer.tone / 10, now);
-      }
-    }
-
     // Update stereo width (real-time update)
     if (settings.stereoWidth) {
       if (this.stereoLeftDirect && this.stereoRightDirect &&
@@ -2174,27 +1501,6 @@ export class AudioEngine {
           this.stereoLeftCrossfeed.gain.setValueAtTime(0, now);
           this.stereoRightCrossfeed.gain.setValueAtTime(0, now);
         }
-      }
-    }
-
-    // Update Haas widener
-    if (settings.haas) {
-      if (this.haasMix && this.haasBypass && settings.haas.enabled !== undefined) {
-        this.haasMix.gain.setValueAtTime(settings.haas.enabled ? 1 : 0, now);
-        this.haasBypass.gain.setValueAtTime(settings.haas.enabled ? 0 : 1, now);
-      }
-      if (this.haasLeftDelay && this.haasRightDelay && settings.haas.delayMs !== undefined) {
-        const delaySec = Math.min(0.03, Math.max(0, settings.haas.delayMs / 1000));
-        this.haasLeftDelay.delayTime.setValueAtTime(0, now);
-        this.haasRightDelay.delayTime.setValueAtTime(delaySec, now);
-      }
-      if (this.haasLeftDry && this.haasRightDry && this.haasLeftWet && this.haasRightWet && settings.haas.mix !== undefined) {
-        const wet = settings.haas.mix / 100;
-        const dry = 1 - wet;
-        this.haasLeftDry.gain.setValueAtTime(dry, now);
-        this.haasRightDry.gain.setValueAtTime(dry, now);
-        this.haasLeftWet.gain.setValueAtTime(wet, now);
-        this.haasRightWet.gain.setValueAtTime(wet, now);
       }
     }
 
@@ -2247,7 +1553,7 @@ export class AudioEngine {
   }
 
   /**
-   * Default settings: Harmonizer (chorus) dimatikan agar Saturation tidak terdengar flanger.
+   * Default settings
    */
   private currentSettings: AudioEngineSettings = {
     inputGain: 0,
@@ -2255,10 +1561,7 @@ export class AudioEngine {
     compressor: { enabled: true, threshold: -20, ratio: 4, attack: 10, release: 100, gain: 0 },
     limiter: { enabled: true, threshold: -0.3 },
     stereoWidth: { enabled: true, width: 100 },
-    haas: { enabled: false, delayMs: 12, mix: 30 },
-    harmonizer: { enabled: false, mix: 0, depth: 0, tone: 0 },
     reverb: { enabled: false, mix: 0, size: 0, decay: 0, damping: 0 },
-    saturation: { enabled: true, drive: 25, mix: 40, bias: 0, mode: 'soft' },
     multibandCompressor: {
       enabled: true,
       bands: [
@@ -2303,13 +1606,6 @@ export class AudioEngine {
     if (this.limiterNode) {
       try {
         this.limiterNode.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    if (this.saturationNode) {
-      try {
-        this.saturationNode.disconnect();
       } catch {
         // Ignore
       }
@@ -2417,113 +1713,6 @@ export class AudioEngine {
       } catch {
         // Ignore
       }
-    }
-    // Cleanup harmonizer
-    if (this.harmonizerDelay1) {
-      try {
-        this.harmonizerDelay1.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    if (this.harmonizerDelay2) {
-      try {
-        this.harmonizerDelay2.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    if (this.harmonizerLFO1) {
-      try {
-        this.harmonizerLFO1.stop();
-        this.harmonizerLFO1.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    if (this.harmonizerLFO2) {
-      try {
-        this.harmonizerLFO2.stop();
-        this.harmonizerLFO2.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    if (this.harmonizerToneFilter) {
-      try {
-        this.harmonizerToneFilter.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    if (this.harmonizerDryGain) {
-      try {
-        this.harmonizerDryGain.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    if (this.harmonizerWetGain) {
-      try {
-        this.harmonizerWetGain.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    if (this.harmonizerMix) {
-      try {
-        this.harmonizerMix.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    if (this.harmonizerBypass) {
-      try {
-        this.harmonizerBypass.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    if (this.harmonizerOutput) {
-      try {
-        this.harmonizerOutput.disconnect();
-      } catch {
-        // Ignore
-      }
-    }
-    // Cleanup Haas
-    if (this.haasSplitter) {
-      try { this.haasSplitter.disconnect(); } catch { }
-    }
-    if (this.haasMerger) {
-      try { this.haasMerger.disconnect(); } catch { }
-    }
-    if (this.haasLeftDelay) {
-      try { this.haasLeftDelay.disconnect(); } catch { }
-    }
-    if (this.haasRightDelay) {
-      try { this.haasRightDelay.disconnect(); } catch { }
-    }
-    if (this.haasLeftDry) {
-      try { this.haasLeftDry.disconnect(); } catch { }
-    }
-    if (this.haasRightDry) {
-      try { this.haasRightDry.disconnect(); } catch { }
-    }
-    if (this.haasLeftWet) {
-      try { this.haasLeftWet.disconnect(); } catch { }
-    }
-    if (this.haasRightWet) {
-      try { this.haasRightWet.disconnect(); } catch { }
-    }
-    if (this.haasMix) {
-      try { this.haasMix.disconnect(); } catch { }
-    }
-    if (this.haasBypass) {
-      try { this.haasBypass.disconnect(); } catch { }
-    }
-    if (this.haasOutput) {
-      try { this.haasOutput.disconnect(); } catch { }
     }
   }
 
@@ -2670,96 +1859,6 @@ export class AudioEngine {
       compressorBypass.gain.value = settings.compressor.enabled ? 0 : 1;
       const compressorOutput = offlineContext.createGain();
 
-      // Saturation (disamakan dengan path real-time: kurva & cara mix)
-      const saturationNode = offlineContext.createWaveShaper();
-      const satDrive = settings.saturation.drive;
-      const satBias = settings.saturation.bias;
-      const satMode = settings.saturation.mode || 'soft';
-      const satMix = settings.saturation.mix;
-      const satCurve = new Float32Array(65536);
-      const satHardLimit = satMode === 'soft' ? 0.9 : 0.98;
-      let satSumInSq = 0;
-      let satSumOutSq = 0;
-
-      for (let i = 0; i < 65536; i++) {
-        const x = (i - 32768) / 32768;
-        let saturated: number;
-
-        // Gunakan model yang sama dengan createSaturationNode / updateSettings
-        switch (satMode) {
-          case 'tube': {
-            const drive = satDrive / 100;
-            const bias = satBias / 100;
-            const tubeGain = 1 + drive * 4.0;
-            const tubeInput = x * tubeGain;
-            if (tubeInput >= 0) {
-              saturated = Math.tanh(tubeInput * 0.9) * 1.05;
-            } else {
-              saturated = Math.tanh(tubeInput * 1.1) * 0.95;
-            }
-            saturated += Math.sin(tubeInput * Math.PI * 0.5) * 0.05 * drive;
-            saturated += bias * 0.12;
-            break;
-          }
-          case 'tape': {
-            const drive = satDrive / 100;
-            const bias = satBias / 100;
-            const tapeGain = 1 + drive * 3.5;
-            const tapeInput = x * tapeGain;
-            const tapeBase = (2 / Math.PI) * Math.atan(tapeInput * Math.PI / 2);
-            const tapeCompression = tapeInput / (1 + Math.abs(tapeInput) * 0.5);
-            saturated = tapeBase * 0.7 + tapeCompression * 0.3;
-            saturated += Math.sin(tapeInput * Math.PI) * 0.03 * drive;
-            saturated += bias * 0.1;
-            break;
-          }
-          case 'soft':
-          default: {
-            const drive = satDrive / 100;
-            const bias = satBias / 100;
-            const softGain = 1 + drive * 2.0;
-            const biased = x + bias * 0.15;
-            const input = biased * softGain;
-            saturated = Math.tanh(input);
-            break;
-          }
-        }
-
-        // Seri-style mix di dalam kurva: samakan dengan path real-time
-        const mixValue = satMix / 100;
-        const blended = x + mixValue * (saturated - x);
-
-        const y = Math.max(-satHardLimit, Math.min(satHardLimit, blended));
-        satCurve[i] = y;
-        satSumInSq += x * x;
-        satSumOutSq += y * y;
-      }
-
-      let satCompensation = satSumOutSq > 0 ? Math.sqrt(satSumInSq / satCurve.length) / Math.sqrt(satSumOutSq / satCurve.length) : 1;
-      satCompensation = Math.min(1.2, Math.max(0.5, satCompensation));
-      if (satMode === 'soft') {
-        satCompensation = Math.min(satCompensation, 0.9);
-      }
-
-      for (let i = 0; i < satCurve.length; i++) {
-        satCurve[i] = Math.max(-0.98, Math.min(0.98, satCurve[i] * satCompensation));
-      }
-
-      saturationNode.curve = satCurve;
-      saturationNode.oversample = (satMode === 'soft' || satMix >= 100 ? '4x' : 'none');
-
-      const saturationDryGain = offlineContext.createGain();
-      const saturationWetGain = offlineContext.createGain();
-      // Offline path: gunakan hanya jalur wet, karena mix sudah di-handle di kurva
-      saturationDryGain.gain.value = 0;
-      saturationWetGain.gain.value = 1;
-
-      const saturationMix = offlineContext.createGain();
-      const saturationBypass = offlineContext.createGain();
-      saturationMix.gain.value = settings.saturation.enabled ? 1 : 0;
-      saturationBypass.gain.value = settings.saturation.enabled ? 0 : 1;
-      const saturationOutput = offlineContext.createGain();
-
       // Limiter with bypass (optimized for professional mastering)
       const limiter = offlineContext.createDynamicsCompressor();
       limiter.threshold.value = settings.limiter.threshold;
@@ -2827,76 +1926,8 @@ export class AudioEngine {
         reverbWetGain.connect(reverbOutput);
       }
 
-      // Saturation with bypass
-      const saturationInput = reverbOutput || compressorOutput;
-      saturationInput.connect(saturationNode);
-      saturationInput.connect(saturationDryGain);
-      saturationNode.connect(saturationWetGain);
-
-      // Mix wet and dry signals using GainNode (not ChannelMerger)
-      const saturationMixNode = offlineContext.createGain();
-      saturationWetGain.connect(saturationMixNode);
-      saturationDryGain.connect(saturationMixNode);
-      saturationMixNode.connect(saturationMix);
-
-      saturationInput.connect(saturationBypass);
-      saturationMix.connect(saturationOutput);
-      saturationBypass.connect(saturationOutput);
-
-      // Harmonizer with bypass (delay-based chorus effect)
-      // Untuk export, kita gunakan fixed delay time dengan sedikit variasi
-      // (LFO tidak bisa digunakan di OfflineAudioContext dengan cara yang sama)
-      const harmonizerDelay1 = offlineContext.createDelay(0.05);
-      const harmonizerDelay2 = offlineContext.createDelay(0.05);
-      // Base delay dengan variasi berdasarkan depth
-      const baseDelay = 0.010; // 10ms
-      const depthVariation = (settings.harmonizer.depth / 100) * 0.005; // Max 5ms variation
-      harmonizerDelay1.delayTime.value = baseDelay;
-      harmonizerDelay2.delayTime.value = baseDelay * 1.5 + depthVariation; // Slightly different delay
-      const harmonizerToneFilter = offlineContext.createBiquadFilter();
-      harmonizerToneFilter.type = 'peaking';
-      harmonizerToneFilter.frequency.value = 2000 + (settings.harmonizer.tone / 100 * 3000);
-      harmonizerToneFilter.Q.value = 1;
-      harmonizerToneFilter.gain.value = settings.harmonizer.tone / 10;
-
-      const harmonizerDryGain = offlineContext.createGain();
-      const harmonizerWetGain = offlineContext.createGain();
-      harmonizerDryGain.gain.value = 1 - (settings.harmonizer.mix / 100);
-      harmonizerWetGain.gain.value = settings.harmonizer.mix / 100;
-
-      const harmonizerMix = offlineContext.createGain();
-      const harmonizerBypass = offlineContext.createGain();
-      harmonizerMix.gain.value = settings.harmonizer.enabled ? 1 : 0;
-      harmonizerBypass.gain.value = settings.harmonizer.enabled ? 0 : 1;
-      const harmonizerOutput = offlineContext.createGain();
-
-      if (settings.harmonizer.enabled) {
-        // Connect input to delays and dry path
-        saturationOutput.connect(harmonizerDelay1);
-        saturationOutput.connect(harmonizerDelay2);
-        saturationOutput.connect(harmonizerDryGain);
-
-        // Process delayed signals through tone filter (sum both delays)
-        const delaySum = offlineContext.createGain();
-        harmonizerDelay1.connect(delaySum);
-        harmonizerDelay2.connect(delaySum);
-        delaySum.connect(harmonizerToneFilter);
-        harmonizerToneFilter.connect(harmonizerWetGain);
-
-        // Mix dry and wet
-        const harmonizerMixNode = offlineContext.createGain();
-        harmonizerDryGain.connect(harmonizerMixNode);
-        harmonizerWetGain.connect(harmonizerMixNode);
-        harmonizerMixNode.connect(harmonizerMix);
-      } else {
-        saturationOutput.connect(harmonizerMix);
-      }
-      saturationOutput.connect(harmonizerBypass);
-      harmonizerMix.connect(harmonizerOutput);
-      harmonizerBypass.connect(harmonizerOutput);
-
       // Stereo Width (if enabled and stereo) - same proper implementation as playback
-      let stereoOutput: GainNode = harmonizerOutput;
+      let stereoOutput: GainNode = reverbOutput || compressorOutput;
       if (settings.stereoWidth.enabled && numberOfChannels >= 2) {
         const splitter = offlineContext.createChannelSplitter(2);
         const merger = offlineContext.createChannelMerger(2);
@@ -2913,7 +1944,7 @@ export class AudioEngine {
         leftCrossfeed.gain.value = (1 - width) / 2;
         rightCrossfeed.gain.value = (1 - width) / 2;
 
-        saturationOutput.connect(splitter);
+        (reverbOutput || compressorOutput).connect(splitter);
         splitter.connect(leftDirect, 0);
         splitter.connect(rightDirect, 1);
         splitter.connect(leftCrossfeed, 1);
@@ -2933,48 +1964,9 @@ export class AudioEngine {
         merger.connect(stereoOutput);
       }
 
-      // Haas widener (optional, after stereo width)
-      let spatialOutput: GainNode = stereoOutput;
-      if (settings.haas.enabled && numberOfChannels >= 2) {
-        const haasSplitter = offlineContext.createChannelSplitter(2);
-        const haasMerger = offlineContext.createChannelMerger(2);
-        const leftDelay = offlineContext.createDelay(0.05);
-        const rightDelay = offlineContext.createDelay(0.05);
-        const delaySec = Math.min(0.03, Math.max(0, settings.haas.delayMs / 1000));
-        leftDelay.delayTime.value = 0;
-        rightDelay.delayTime.value = delaySec;
-        const leftDry = offlineContext.createGain();
-        const rightDry = offlineContext.createGain();
-        const leftWet = offlineContext.createGain();
-        const rightWet = offlineContext.createGain();
-        const wet = settings.haas.mix / 100;
-        const dry = 1 - wet;
-        leftDry.gain.value = dry;
-        rightDry.gain.value = dry;
-        leftWet.gain.value = wet;
-        rightWet.gain.value = wet;
-        stereoOutput.connect(haasSplitter);
-        haasSplitter.connect(leftDry, 0);
-        haasSplitter.connect(leftDelay, 0);
-        leftDelay.connect(leftWet);
-        haasSplitter.connect(rightDry, 1);
-        haasSplitter.connect(rightDelay, 1);
-        rightDelay.connect(rightWet);
-        const leftSum = offlineContext.createGain();
-        const rightSum = offlineContext.createGain();
-        leftDry.connect(leftSum);
-        leftWet.connect(leftSum);
-        rightDry.connect(rightSum);
-        rightWet.connect(rightSum);
-        leftSum.connect(haasMerger, 0, 0);
-        rightSum.connect(haasMerger, 0, 1);
-        spatialOutput = offlineContext.createGain();
-        haasMerger.connect(spatialOutput);
-      }
-
       // Limiter with bypass
-      spatialOutput.connect(limiter);
-      spatialOutput.connect(limiterBypass);
+      stereoOutput.connect(limiter);
+      stereoOutput.connect(limiterBypass);
       limiter.connect(limiterMix);
       limiterMix.connect(limiterOutput);
       limiterBypass.connect(limiterOutput);
@@ -3158,80 +2150,6 @@ export class AudioEngine {
     compressorBypass.gain.value = settings.compressor.enabled ? 0 : 1;
     const compressorOutput = offlineContext.createGain();
 
-    const saturationNode = offlineContext.createWaveShaper();
-    const satDrive = settings.saturation.drive;
-    const satBias = settings.saturation.bias;
-    const satMode = settings.saturation.mode || 'soft';
-    const satMix = settings.saturation.mix;
-    const satCurve = new Float32Array(65536);
-    const satHardLimit = satMode === 'soft' ? 0.9 : 0.98;
-    let satSumInSq = 0;
-    let satSumOutSq = 0;
-    for (let i = 0; i < 65536; i++) {
-      const x = (i - 32768) / 32768;
-      let saturated: number;
-      switch (satMode) {
-        case 'tube': {
-          const drive = satDrive / 100;
-          const bias = satBias / 100;
-          const tubeGain = 1 + drive * 4.0;
-          const tubeInput = x * tubeGain;
-          saturated = tubeInput >= 0 ? Math.tanh(tubeInput * 0.9) * 1.05 : Math.tanh(tubeInput * 1.1) * 0.95;
-          saturated += Math.sin(tubeInput * Math.PI * 0.5) * 0.05 * drive;
-          saturated += bias * 0.12;
-          break;
-        }
-        case 'tape': {
-          const drive = satDrive / 100;
-          const bias = satBias / 100;
-          const tapeGain = 1 + drive * 3.5;
-          const tapeInput = x * tapeGain;
-          const tapeBase = (2 / Math.PI) * Math.atan(tapeInput * Math.PI / 2);
-          const tapeCompression = tapeInput / (1 + Math.abs(tapeInput) * 0.5);
-          saturated = tapeBase * 0.7 + tapeCompression * 0.3;
-          saturated += Math.sin(tapeInput * Math.PI) * 0.03 * drive;
-          saturated += bias * 0.1;
-          break;
-        }
-        default: {
-          const drive = satDrive / 100;
-          const bias = satBias / 100;
-          const softGain = 1 + drive * 2.0;
-          const biased = x + bias * 0.15;
-          const input = biased * softGain;
-          saturated = Math.tanh(input);
-          break;
-        }
-      }
-      const mixValue = satMix / 100;
-      const blended = x + mixValue * (saturated - x);
-      const y = Math.max(-satHardLimit, Math.min(satHardLimit, blended));
-      satCurve[i] = y;
-      satSumInSq += x * x;
-      satSumOutSq += y * y;
-    }
-    let satCompensation = satSumOutSq > 0 ? Math.sqrt(satSumInSq / satCurve.length) / Math.sqrt(satSumOutSq / satCurve.length) : 1;
-    satCompensation = Math.min(1.2, Math.max(0.5, satCompensation));
-    if (satMode === 'soft') {
-      satCompensation = Math.min(satCompensation, 0.9);
-    }
-    for (let i = 0; i < satCurve.length; i++) {
-      satCurve[i] = Math.max(-0.98, Math.min(0.98, satCurve[i] * satCompensation));
-    }
-    saturationNode.curve = satCurve;
-    saturationNode.oversample = (satMode === 'soft' || satMix >= 100 ? '4x' : 'none');
-
-    const saturationDryGain = offlineContext.createGain();
-    const saturationWetGain = offlineContext.createGain();
-    saturationDryGain.gain.value = 0;
-    saturationWetGain.gain.value = 1;
-
-    const saturationMix = offlineContext.createGain();
-    const saturationBypass = offlineContext.createGain();
-    saturationMix.gain.value = settings.saturation.enabled ? 1 : 0;
-    saturationBypass.gain.value = settings.saturation.enabled ? 0 : 1;
-    const saturationOutput = offlineContext.createGain();
-
     let reverbOutput: GainNode | null = null;
     if (settings.reverb.enabled) {
       const maxDelayTime = 0.1;
@@ -3266,19 +2184,7 @@ export class AudioEngine {
     compressorMix.connect(compressorOutput);
     compressorBypass.connect(compressorOutput);
 
-    const saturationInput = reverbOutput || compressorOutput;
-    saturationInput.connect(saturationNode);
-    saturationInput.connect(saturationDryGain);
-    saturationNode.connect(saturationWetGain);
-    const saturationMixNode = offlineContext.createGain();
-    saturationWetGain.connect(saturationMixNode);
-    saturationDryGain.connect(saturationMixNode);
-    saturationMixNode.connect(saturationMix);
-    saturationInput.connect(saturationBypass);
-    saturationMix.connect(saturationOutput);
-    saturationBypass.connect(saturationOutput);
-
-    let stereoOutput: GainNode = saturationOutput;
+    let stereoOutput: GainNode = reverbOutput || compressorOutput;
     if (settings.stereoWidth.enabled && numberOfChannels >= 2) {
       const splitter = offlineContext.createChannelSplitter(2);
       const merger = offlineContext.createChannelMerger(2);
@@ -3291,7 +2197,7 @@ export class AudioEngine {
       rightDirect.gain.value = (1 + width) / 2;
       leftCrossfeed.gain.value = (1 - width) / 2;
       rightCrossfeed.gain.value = (1 - width) / 2;
-      saturationOutput.connect(splitter);
+      (reverbOutput || compressorOutput).connect(splitter);
       splitter.connect(leftDirect, 0);
       splitter.connect(rightDirect, 1);
       splitter.connect(leftCrossfeed, 1);
@@ -3306,45 +2212,6 @@ export class AudioEngine {
       rightSum.connect(merger, 0, 1);
       stereoOutput = offlineContext.createGain();
       merger.connect(stereoOutput);
-    }
-
-    // Haas widener for loudness measurement chain (keep consistent)
-    let spatialOutputLM: GainNode = stereoOutput;
-    if (settings.haas.enabled && numberOfChannels >= 2) {
-      const haasSplitter = offlineContext.createChannelSplitter(2);
-      const haasMerger = offlineContext.createChannelMerger(2);
-      const leftDelay = offlineContext.createDelay(0.05);
-      const rightDelay = offlineContext.createDelay(0.05);
-      const delaySec = Math.min(0.03, Math.max(0, settings.haas.delayMs / 1000));
-      leftDelay.delayTime.value = 0;
-      rightDelay.delayTime.value = delaySec;
-      const leftDry = offlineContext.createGain();
-      const rightDry = offlineContext.createGain();
-      const leftWet = offlineContext.createGain();
-      const rightWet = offlineContext.createGain();
-      const wet = settings.haas.mix / 100;
-      const dry = 1 - wet;
-      leftDry.gain.value = dry;
-      rightDry.gain.value = dry;
-      leftWet.gain.value = wet;
-      rightWet.gain.value = wet;
-      stereoOutput.connect(haasSplitter);
-      haasSplitter.connect(leftDry, 0);
-      haasSplitter.connect(leftDelay, 0);
-      leftDelay.connect(leftWet);
-      haasSplitter.connect(rightDry, 1);
-      haasSplitter.connect(rightDelay, 1);
-      rightDelay.connect(rightWet);
-      const leftSum = offlineContext.createGain();
-      const rightSum = offlineContext.createGain();
-      leftDry.connect(leftSum);
-      leftWet.connect(leftSum);
-      rightDry.connect(rightSum);
-      rightWet.connect(rightSum);
-      leftSum.connect(haasMerger, 0, 0);
-      rightSum.connect(haasMerger, 0, 1);
-      spatialOutputLM = offlineContext.createGain();
-      haasMerger.connect(spatialOutputLM);
     }
 
     const limiter = offlineContext.createDynamicsCompressor();
@@ -3363,8 +2230,8 @@ export class AudioEngine {
     outputGain.gain.value = this.dbToGain(settings.outputGain);
 
     source.connect(inputGain);
-    spatialOutputLM.connect(limiter);
-    spatialOutputLM.connect(limiterBypass);
+    stereoOutput.connect(limiter);
+    stereoOutput.connect(limiterBypass);
     limiter.connect(limiterMix);
     limiterMix.connect(limiterOutput);
     limiterBypass.connect(limiterOutput);

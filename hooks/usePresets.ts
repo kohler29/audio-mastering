@@ -22,25 +22,12 @@ export interface PresetSettings {
     enabled: boolean;
     width: number;
   };
-  harmonizer: {
-    enabled: boolean;
-    mix: number;
-    depth: number;
-    tone: number;
-  };
   reverb: {
     enabled: boolean;
     mix: number;
     size: number;
     decay: number;
     damping: number;
-  };
-  saturation: {
-    enabled: boolean;
-    drive: number;
-    mix: number;
-    bias: number;
-    mode: 'tube' | 'tape' | 'soft';
   };
   multibandCompressor?: {
     enabled: boolean;
@@ -60,6 +47,7 @@ export interface Preset {
   id: string;
   name: string;
   userId: string;
+  folder: string | null;
   isPublic: boolean;
   settings: PresetSettings;
   createdAt: string;
@@ -74,12 +62,12 @@ export interface UsePresetsReturn {
   presets: Preset[];
   isLoading: boolean;
   error: string | null;
-  savePreset: (preset: { name: string; settings: PresetSettings; isPublic: boolean }) => Promise<Preset>;
+  savePreset: (preset: { name: string; settings: PresetSettings; isPublic: boolean; folder?: string | null }) => Promise<Preset>;
   loadPreset: (id: string) => Promise<Preset | null>;
   deletePreset: (id: string) => Promise<boolean>;
   updatePreset: (id: string, updates: Partial<Preset>) => Promise<Preset | null>;
   refreshPresets: () => Promise<void>;
-  presetNameExists: (name: string, excludeId?: string) => boolean;
+  presetNameExists: (name: string, folder?: string | null, excludeId?: string) => boolean;
 }
 
 export function usePresets(): UsePresetsReturn {
@@ -117,7 +105,7 @@ export function usePresets(): UsePresetsReturn {
     refreshPresets();
   }, [refreshPresets]);
 
-  const savePreset = useCallback(async (preset: { name: string; settings: PresetSettings; isPublic: boolean }): Promise<Preset> => {
+  const savePreset = useCallback(async (preset: { name: string; settings: PresetSettings; isPublic: boolean; folder?: string | null }): Promise<Preset> => {
     setIsLoading(true);
     setError(null);
 
@@ -214,8 +202,13 @@ export function usePresets(): UsePresetsReturn {
     }
   }, []);
 
-  const checkPresetNameExists = useCallback((name: string, excludeId?: string): boolean => {
-    return presets.some(p => p.name === name && p.id !== excludeId);
+  const checkPresetNameExists = useCallback((name: string, folder?: string | null, excludeId?: string): boolean => {
+    const targetFolder = folder ?? null;
+    return presets.some(p => 
+      p.name === name && 
+      p.folder === targetFolder && 
+      p.id !== excludeId
+    );
   }, [presets]);
 
   return {

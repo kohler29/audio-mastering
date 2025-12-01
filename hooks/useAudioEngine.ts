@@ -19,7 +19,7 @@ export interface UseAudioEngineReturn {
   stop: () => void;
   seek: (time: number) => void;
   updateSettings: (settings: Partial<AudioEngineSettings>) => void;
-  setupAudioChain: (settings: AudioEngineSettings) => void;
+  setupAudioChain: (settings: AudioEngineSettings) => Promise<void>;
   exportAudio: (settings: AudioEngineSettings, format?: 'wav' | 'mp3' | 'flac') => Promise<Blob>;
   resumeContext: () => Promise<void>;
   fadeIn: (durationMs: number) => void;
@@ -121,11 +121,11 @@ export function useAudioEngine(): UseAudioEngineReturn {
     }
   }, [engine]);
 
-  const play = useCallback(() => {
+  const play = useCallback(async () => {
     if (!engine) return;
 
     try {
-      engine.play();
+      await engine.play();
       setIsPlaying(true);
       setError(null);
     } catch (err) {
@@ -185,11 +185,11 @@ export function useAudioEngine(): UseAudioEngineReturn {
     }
   }, [engine]);
 
-  const setupAudioChain = useCallback((settings: AudioEngineSettings) => {
+  const setupAudioChain = useCallback(async (settings: AudioEngineSettings) => {
     if (!engine) return;
 
     try {
-      engine.setupAudioChain(settings);
+      await engine.setupAudioChain(settings);
       setError(null);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to setup audio chain';

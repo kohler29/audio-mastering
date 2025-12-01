@@ -3,8 +3,8 @@
 import "dotenv/config";
 import { defineConfig, env } from "prisma/config";
 
-// Untuk migration, gunakan DIRECT_URL jika ada
-// Accelerator URL (prisma+postgres://...) tidak bisa digunakan untuk migration
+// Untuk migration dan db push, gunakan DIRECT_URL jika ada
+// Accelerator URL (prisma+postgres://...) tidak bisa digunakan untuk migration/db push
 // Jika DIRECT_URL tidak ada, gunakan DATABASE_URL (untuk development)
 const getDirectUrl = (): string => {
   try {
@@ -20,12 +20,12 @@ const getDirectUrl = (): string => {
   // Prioritas 2: DATABASE_URL
   const databaseUrl = env("DATABASE_URL");
   
-  // Jika DATABASE_URL adalah Accelerator URL, kita perlu direct URL untuk migration
+  // Jika DATABASE_URL adalah Accelerator URL, kita perlu direct URL untuk migration/db push
   if (databaseUrl.startsWith("prisma+")) {
     console.warn(
       "⚠️  WARNING: DATABASE_URL adalah Accelerator URL. " +
-      "Untuk migration, set DIRECT_URL dengan direct PostgreSQL connection string. " +
-      "Menggunakan Accelerator URL sebagai fallback (mungkin tidak bekerja untuk migration)."
+      "Untuk migration dan db push, set DIRECT_URL dengan direct PostgreSQL connection string. " +
+      "Menggunakan Accelerator URL sebagai fallback (mungkin tidak bekerja untuk migration/db push)."
     );
   }
   

@@ -115,21 +115,23 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, settings, isPublic } = body;
+    const { name, settings, isPublic, folder } = body;
 
-    // Cek apakah nama sudah digunakan oleh preset lain milik user ini
+    // Cek apakah nama sudah digunakan oleh preset lain milik user ini di folder yang sama
     if (name && name.trim() !== preset.name) {
+      const targetFolder = folder !== undefined ? (folder?.trim() || null) : preset.folder;
       const existingPreset = await prisma.preset.findFirst({
         where: {
           userId: payload.userId,
           name: name.trim(),
+          folder: targetFolder,
           id: { not: id },
         },
       });
 
       if (existingPreset) {
         return NextResponse.json(
-          { error: `Preset dengan nama "${name}" sudah ada` },
+          { error: `Preset dengan nama "${name}" sudah ada${targetFolder ? ` di folder "${targetFolder}"` : ''}` },
           { status: 400 }
         );
       }
@@ -142,6 +144,7 @@ export async function PATCH(
         ...(name && { name: name.trim() }),
         ...(settings && { settings }),
         ...(typeof isPublic === 'boolean' && { isPublic }),
+        ...(folder !== undefined && { folder: folder?.trim() || null }),
       },
       include: {
         user: {

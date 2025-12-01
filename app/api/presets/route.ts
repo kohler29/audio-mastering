@@ -42,9 +42,10 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: [
+        { folder: 'asc' },
+        { createdAt: 'desc' },
+      ],
     });
 
     return NextResponse.json({ presets }, { status: 200 });
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, settings, isPublic } = body;
+    const { name, settings, isPublic, folder } = body;
 
     // Validasi input
     if (!name || !settings) {
@@ -100,17 +101,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Cek apakah nama preset sudah ada untuk user ini
+    // Cek apakah nama preset sudah ada untuk user ini di folder yang sama
     const existingPreset = await prisma.preset.findFirst({
       where: {
         userId: payload.userId,
         name: name.trim(),
+        folder: folder?.trim() || null,
       },
     });
 
     if (existingPreset) {
       return NextResponse.json(
-        { error: `Preset dengan nama "${name}" sudah ada` },
+        { error: `Preset dengan nama "${name}" sudah ada${folder ? ` di folder "${folder}"` : ''}` },
         { status: 400 }
       );
     }
@@ -122,6 +124,7 @@ export async function POST(request: NextRequest) {
         userId: payload.userId,
         settings: settings,
         isPublic: isPublic === true,
+        folder: folder?.trim() || null,
       },
       include: {
         user: {

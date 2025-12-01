@@ -28,6 +28,7 @@ model Preset {
   id        String   @id @default(cuid())
   name      String
   userId    String
+  folder    String?  // Folder untuk organisasi preset per user
   isPublic  Boolean  @default(false) // false = private, true = published
   settings  Json     // Store preset settings as JSON
   createdAt DateTime @default(now())
@@ -36,5 +37,6 @@ model Preset {
 
   @@index([userId])
   @@index([isPublic])
+  @@index([userId, folder])
   @@map("presets")
 }

@@ -9,7 +9,10 @@
     "lint": "eslint .",
     "fetch:ffmpeg": "bun scripts/fetch-ffmpeg-core.ts",
     "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:verify": "bun scripts/verify-folder-column.ts",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio"
   },
   "dependencies": {

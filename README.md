@@ -48,8 +48,12 @@ Aplikasi web profesional untuk audio mastering dengan kontrol advanced dan visua
    
    Buat file `.env` di root directory:
    ```env
-   # Database
-   DATABASE_URL="postgresql://user:password@localhost:5432/master_db?schema=public"
+   # Database - Prisma Accelerate URL (untuk aplikasi)
+   DATABASE_URL="prisma+postgres://user:password@host:5432/database?schema=public"
+   
+   # Database - Direct PostgreSQL URL (untuk migration)
+   # WAJIB di-set jika menggunakan Prisma Accelerate
+   DIRECT_URL="postgresql://user:password@host:5432/database?schema=public"
    
    # JWT Authentication
    JWT_SECRET="your-super-secret-jwt-key-min-32-chars"
@@ -60,13 +64,21 @@ Aplikasi web profesional untuk audio mastering dengan kontrol advanced dan visua
    GOOGLE_CLIENT_SECRET="your-google-client-secret"
    GOOGLE_REDIRECT_URI="http://localhost:3000/api/auth/google/callback"
    ```
+   
+   **Catatan untuk Prisma Accelerate:**
+   - `DATABASE_URL`: Gunakan Prisma Accelerate URL (format: `prisma+postgres://...`)
+   - `DIRECT_URL`: **WAJIB** di-set dengan direct PostgreSQL connection string untuk migration
+   - Migration tidak bisa menggunakan Accelerate URL, harus direct connection
 
 4. **Setup database**
    ```bash
    # Generate Prisma Client
    bun run db:generate
    
-   # Run migrations
+   # Push schema ke database (recommended untuk development)
+   bun run db:push
+   
+   # Atau gunakan migration (untuk production)
    bun run db:migrate
    ```
 
@@ -116,9 +128,11 @@ bun start            # Start production server
 bun lint             # Run ESLint
 
 # Database
-bun run db:generate  # Generate Prisma Client
-bun run db:migrate   # Run database migrations
-bun run db:studio    # Open Prisma Studio (database GUI)
+bun run db:generate      # Generate Prisma Client
+bun run db:push          # Push schema ke database (development, recommended)
+bun run db:migrate       # Run database migrations (development)
+bun run db:migrate:deploy # Deploy migrations (production)
+bun run db:studio        # Open Prisma Studio (database GUI)
 ```
 
 ---
@@ -222,6 +236,42 @@ bunx prisma generate
 
 ### Database Connection Error
 Pastikan `DATABASE_URL` di `.env` sudah benar dan database sudah running.
+
+### Folder Column Tidak Muncul di Prisma Studio
+Jika column `folder` sudah di-push tapi tidak muncul di Prisma Studio:
+1. **Restart Prisma Studio:**
+   ```bash
+   # Stop Prisma Studio (Ctrl+C)
+   # Lalu jalankan lagi
+   bun run db:studio
+   ```
+2. **Verify column sudah ada:**
+   ```bash
+   bun run db:verify
+   ```
+3. **Refresh browser** di Prisma Studio (F5 atau Cmd+R)
+
+### Migration/DB Push Error dengan Prisma Accelerate
+Jika menggunakan Prisma Accelerate, pastikan `DIRECT_URL` sudah di-set di `.env`:
+```env
+DIRECT_URL="postgresql://user:password@host:5432/database?schema=public"
+```
+Migration dan `db push` memerlukan direct connection, tidak bisa menggunakan Accelerate URL.
+
+**Cara menggunakan:**
+```bash
+# Untuk development (recommended)
+bun run db:push
+
+# Untuk production dengan migration
+bun run db:migrate:deploy
+```
+
+**Alternatif:** Jika db push/migration tidak bisa dijalankan, gunakan script manual:
+```bash
+# Apply migration secara manual
+psql $DIRECT_URL -f scripts/apply-migration-folder.sql
+```
 
 ### Port 3000 sudah digunakan
 ```bash
