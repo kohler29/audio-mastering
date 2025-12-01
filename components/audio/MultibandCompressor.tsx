@@ -33,6 +33,8 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
   const dragStateRef = useRef<DragState>({ isDragging: false, type: null, bandIndex: -1 });
   const [selectedBand, setSelectedBand] = useState(0);
   const [hoveredElement, setHoveredElement] = useState<{ type: 'threshold' | 'crossover' | 'band' | null; index: number }>({ type: null, index: -1 });
+  const [thresholdInputs, setThresholdInputs] = useState<Record<number, string>>({});
+  const [gainInputs, setGainInputs] = useState<Record<number, string>>({});
 
   const toggleBand = (index: number) => {
     const newBands = [...bands];
@@ -44,6 +46,7 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
     const newBands = [...bands];
     newBands[index].threshold = Math.max(-60, Math.min(0, value));
     onBandsChange(newBands);
+    setThresholdInputs(prev => ({ ...prev, [index]: value.toString() }));
   };
 
   const updateRatio = (index: number, value: number) => {
@@ -56,6 +59,7 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
     const newBands = [...bands];
     newBands[index].gain = value;
     onBandsChange(newBands);
+    setGainInputs(prev => ({ ...prev, [index]: value.toString() }));
   };
 
   const updateHighFreq = (index: number, value: number) => {
@@ -794,25 +798,40 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
             />
               <div className="flex items-center gap-1 mt-1">
                 <input
-                  type="number"
-                  step="0.1"
-                  min={-60}
-                  max={0}
-                  value={bands[selectedBand].threshold}
+                  type="text"
+                  inputMode="decimal"
+                  value={thresholdInputs[selectedBand] ?? bands[selectedBand].threshold.toString()}
                   onChange={(e) => {
                     const val = e.target.value;
-                    if (val === '' || val === '-') {
-                      return;
+                    if (val === '' || val === '-' || /^-?\d*\.?\d*$/.test(val)) {
+                      setThresholdInputs(prev => ({ ...prev, [selectedBand]: val }));
+                      if (val !== '' && val !== '-' && val !== '.' && val !== '-.') {
+                        const numVal = Number(val);
+                        if (!isNaN(numVal)) {
+                          updateThreshold(selectedBand, Math.max(-60, Math.min(0, numVal)));
+                        }
+                      }
                     }
-                    const numVal = Number(val);
-                    if (!isNaN(numVal)) {
-                      updateThreshold(selectedBand, Math.max(-60, Math.min(0, numVal)));
+                  }}
+                  onFocus={(e) => {
+                    e.target.select();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
                     }
                   }}
                   onBlur={(e) => {
-                    const val = Number(e.target.value);
-                    if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                    const val = e.target.value.trim();
+                    if (val === '' || val === '-' || val === '.' || val === '-.') {
                       updateThreshold(selectedBand, -20);
+                    } else {
+                      const numVal = Number(val);
+                      if (isNaN(numVal)) {
+                        updateThreshold(selectedBand, -20);
+                      } else {
+                        updateThreshold(selectedBand, Math.max(-60, Math.min(0, numVal)));
+                      }
                     }
                   }}
                   className="w-20 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -874,25 +893,40 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
             />
               <div className="flex items-center gap-1 mt-1">
                 <input
-                  type="number"
-                  step="0.1"
-                  min={-12}
-                  max={12}
-                  value={bands[selectedBand].gain}
+                  type="text"
+                  inputMode="decimal"
+                  value={gainInputs[selectedBand] ?? bands[selectedBand].gain.toString()}
                   onChange={(e) => {
                     const val = e.target.value;
-                    if (val === '' || val === '-') {
-                      return;
+                    if (val === '' || val === '-' || /^-?\d*\.?\d*$/.test(val)) {
+                      setGainInputs(prev => ({ ...prev, [selectedBand]: val }));
+                      if (val !== '' && val !== '-' && val !== '.' && val !== '-.') {
+                        const numVal = Number(val);
+                        if (!isNaN(numVal)) {
+                          updateGain(selectedBand, Math.max(-12, Math.min(12, numVal)));
+                        }
+                      }
                     }
-                    const numVal = Number(val);
-                    if (!isNaN(numVal)) {
-                      updateGain(selectedBand, Math.max(-12, Math.min(12, numVal)));
+                  }}
+                  onFocus={(e) => {
+                    e.target.select();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
                     }
                   }}
                   onBlur={(e) => {
-                    const val = Number(e.target.value);
-                    if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                    const val = e.target.value.trim();
+                    if (val === '' || val === '-' || val === '.' || val === '-.') {
                       updateGain(selectedBand, 0);
+                    } else {
+                      const numVal = Number(val);
+                      if (isNaN(numVal)) {
+                        updateGain(selectedBand, 0);
+                      } else {
+                        updateGain(selectedBand, Math.max(-12, Math.min(12, numVal)));
+                      }
                     }
                   }}
                   className="w-20 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"

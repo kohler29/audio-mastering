@@ -118,7 +118,9 @@ export function AudioMasteringPlugin() {
   
   // Control states
   const [inputGain, setInputGain] = useState(0);
+  const [inputGainInput, setInputGainInput] = useState<string>('0');
   const [outputGain, setOutputGain] = useState(0);
+  const [outputGainInput, setOutputGainInput] = useState<string>('0');
   const [targetLUFS, setTargetLUFS] = useState(-14);
   
   // Multiband Compressor states
@@ -134,14 +136,17 @@ export function AudioMasteringPlugin() {
   // Compressor states
   const [compressorEnabled, setCompressorEnabled] = useState(true);
   const [compThreshold, setCompThreshold] = useState(-20);
+  const [compThresholdInput, setCompThresholdInput] = useState<string>('-20');
   const [compRatio, setCompRatio] = useState(4);
   const [compAttack, setCompAttack] = useState(10);
   const [compRelease, setCompRelease] = useState(100);
   const [compGain, setCompGain] = useState(0);
+  const [compGainInput, setCompGainInput] = useState<string>('0');
   
   // Limiter states
   const [limiterEnabled, setLimiterEnabled] = useState(true);
   const [limiterThreshold, setLimiterThreshold] = useState(-0.3);
+  const [limiterThresholdInput, setLimiterThresholdInput] = useState<string>('-0.3');
   
   // Stereo Width states
   const [stereoEnabled, setStereoEnabled] = useState(true);
@@ -256,6 +261,27 @@ export function AudioMasteringPlugin() {
       toggleMasterBypass(false);
     }
   }, [audioFile, isInitialized, toggleMasterBypass]);
+
+  // Sync input field values when knob changes
+  useEffect(() => {
+    setInputGainInput(inputGain.toString());
+  }, [inputGain]);
+
+  useEffect(() => {
+    setOutputGainInput(outputGain.toString());
+  }, [outputGain]);
+
+  useEffect(() => {
+    setCompThresholdInput(compThreshold.toString());
+  }, [compThreshold]);
+
+  useEffect(() => {
+    setCompGainInput(compGain.toString());
+  }, [compGain]);
+
+  useEffect(() => {
+    setLimiterThresholdInput(limiterThreshold.toString());
+  }, [limiterThreshold]);
 
   const processAudioFile = async (file: File) => {
     if (!isInitialized) {
@@ -962,7 +988,10 @@ export function AudioMasteringPlugin() {
             <h3 className="text-zinc-400 text-xs mb-3 tracking-wider">INPUT</h3>
             <Knob 
               value={inputGain} 
-              onChange={setInputGain}
+              onChange={(val) => {
+                setInputGain(val);
+                setInputGainInput(val.toString());
+              }}
               min={-24}
               max={24}
               label="GAIN"
@@ -971,27 +1000,46 @@ export function AudioMasteringPlugin() {
             />
             <div className="mt-2 flex justify-center">
               <input
-                type="number"
-                step="0.1"
-                min={-24}
-                max={24}
-                value={inputGain}
+                type="text"
+                inputMode="decimal"
+                value={inputGainInput}
                 onChange={(e) => {
                   const val = e.target.value;
-                  // Allow empty string and minus sign for typing
-                  if (val === '' || val === '-') {
-                    return; // Let user continue typing
+                  // Allow any valid number input pattern
+                  if (val === '' || val === '-' || /^-?\d*\.?\d*$/.test(val)) {
+                    setInputGainInput(val);
+                    // Update actual value if it's a complete number
+                    if (val !== '' && val !== '-' && val !== '.' && val !== '-.') {
+                      const numVal = Number(val);
+                      if (!isNaN(numVal)) {
+                        setInputGain(Math.max(-24, Math.min(24, numVal)));
+                      }
+                    }
                   }
-                  const numVal = Number(val);
-                  if (!isNaN(numVal)) {
-                    setInputGain(Math.max(-24, Math.min(24, numVal)));
+                }}
+                onFocus={(e) => {
+                  e.target.select();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
                   }
                 }}
                 onBlur={(e) => {
-                  // Ensure valid value on blur
-                  const val = Number(e.target.value);
-                  if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                  const val = e.target.value.trim();
+                  if (val === '' || val === '-' || val === '.' || val === '-.') {
                     setInputGain(0);
+                    setInputGainInput('0');
+                  } else {
+                    const numVal = Number(val);
+                    if (isNaN(numVal)) {
+                      setInputGain(0);
+                      setInputGainInput('0');
+                    } else {
+                      const clamped = Math.max(-24, Math.min(24, numVal));
+                      setInputGain(clamped);
+                      setInputGainInput(clamped.toString());
+                    }
                   }
                 }}
                 className="w-20 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -1018,7 +1066,10 @@ export function AudioMasteringPlugin() {
             <h3 className="text-zinc-400 text-xs mb-3 tracking-wider">OUTPUT</h3>
             <Knob 
               value={outputGain} 
-              onChange={setOutputGain}
+              onChange={(val) => {
+                setOutputGain(val);
+                setOutputGainInput(val.toString());
+              }}
               min={-24}
               max={24}
               label="GAIN"
@@ -1027,25 +1078,44 @@ export function AudioMasteringPlugin() {
             />
             <div className="mt-2 flex justify-center">
               <input
-                type="number"
-                step="0.1"
-                min={-24}
-                max={24}
-                value={outputGain}
+                type="text"
+                inputMode="decimal"
+                value={outputGainInput}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val === '' || val === '-') {
-                    return;
+                  if (val === '' || val === '-' || /^-?\d*\.?\d*$/.test(val)) {
+                    setOutputGainInput(val);
+                    if (val !== '' && val !== '-' && val !== '.' && val !== '-.') {
+                      const numVal = Number(val);
+                      if (!isNaN(numVal)) {
+                        setOutputGain(Math.max(-24, Math.min(24, numVal)));
+                      }
+                    }
                   }
-                  const numVal = Number(val);
-                  if (!isNaN(numVal)) {
-                    setOutputGain(Math.max(-24, Math.min(24, numVal)));
+                }}
+                onFocus={(e) => {
+                  e.target.select();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
                   }
                 }}
                 onBlur={(e) => {
-                  const val = Number(e.target.value);
-                  if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                  const val = e.target.value.trim();
+                  if (val === '' || val === '-' || val === '.' || val === '-.') {
                     setOutputGain(0);
+                    setOutputGainInput('0');
+                  } else {
+                    const numVal = Number(val);
+                    if (isNaN(numVal)) {
+                      setOutputGain(0);
+                      setOutputGainInput('0');
+                    } else {
+                      const clamped = Math.max(-24, Math.min(24, numVal));
+                      setOutputGain(clamped);
+                      setOutputGainInput(clamped.toString());
+                    }
                   }
                 }}
                 className="w-20 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -1244,7 +1314,10 @@ export function AudioMasteringPlugin() {
               <div className="flex flex-col items-center">
               <Knob 
                 value={compThreshold} 
-                onChange={setCompThreshold}
+                onChange={(val) => {
+                  setCompThreshold(val);
+                  setCompThresholdInput(val.toString());
+                }}
                 min={-60}
                 max={0}
                 label="THRESHOLD"
@@ -1253,25 +1326,44 @@ export function AudioMasteringPlugin() {
                 defaultValue={-20}
               />
                 <input
-                  type="number"
-                  step="0.1"
-                  min={-60}
-                  max={0}
-                  value={compThreshold}
+                  type="text"
+                  inputMode="decimal"
+                  value={compThresholdInput}
                   onChange={(e) => {
                     const val = e.target.value;
-                    if (val === '' || val === '-') {
-                      return;
+                    if (val === '' || val === '-' || /^-?\d*\.?\d*$/.test(val)) {
+                      setCompThresholdInput(val);
+                      if (val !== '' && val !== '-' && val !== '.' && val !== '-.') {
+                        const numVal = Number(val);
+                        if (!isNaN(numVal)) {
+                          setCompThreshold(Math.max(-60, Math.min(0, numVal)));
+                        }
+                      }
                     }
-                    const numVal = Number(val);
-                    if (!isNaN(numVal)) {
-                      setCompThreshold(Math.max(-60, Math.min(0, numVal)));
+                  }}
+                  onFocus={(e) => {
+                    e.target.select();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
                     }
                   }}
                   onBlur={(e) => {
-                    const val = Number(e.target.value);
-                    if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                    const val = e.target.value.trim();
+                    if (val === '' || val === '-' || val === '.' || val === '-.') {
                       setCompThreshold(-20);
+                      setCompThresholdInput('-20');
+                    } else {
+                      const numVal = Number(val);
+                      if (isNaN(numVal)) {
+                        setCompThreshold(-20);
+                        setCompThresholdInput('-20');
+                      } else {
+                        const clamped = Math.max(-60, Math.min(0, numVal));
+                        setCompThreshold(clamped);
+                        setCompThresholdInput(clamped.toString());
+                      }
                     }
                   }}
                   className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -1356,7 +1448,10 @@ export function AudioMasteringPlugin() {
                 <div className="flex items-center gap-2">
                   <Knob 
                     value={compGain} 
-                    onChange={setCompGain}
+                    onChange={(val) => {
+                      setCompGain(val);
+                      setCompGainInput(val.toString());
+                    }}
                     min={-12}
                     max={12}
                     label=""
@@ -1365,25 +1460,44 @@ export function AudioMasteringPlugin() {
                     defaultValue={0}
                   />
                   <input
-                    type="number"
-                    step="0.1"
-                    min={-12}
-                    max={12}
-                    value={compGain}
+                    type="text"
+                    inputMode="decimal"
+                    value={compGainInput}
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val === '' || val === '-') {
-                        return;
+                      if (val === '' || val === '-' || /^-?\d*\.?\d*$/.test(val)) {
+                        setCompGainInput(val);
+                        if (val !== '' && val !== '-' && val !== '.' && val !== '-.') {
+                          const numVal = Number(val);
+                          if (!isNaN(numVal)) {
+                            setCompGain(Math.max(-12, Math.min(12, numVal)));
+                          }
+                        }
                       }
-                      const numVal = Number(val);
-                      if (!isNaN(numVal)) {
-                        setCompGain(Math.max(-12, Math.min(12, numVal)));
+                    }}
+                    onFocus={(e) => {
+                      e.target.select();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur();
                       }
                     }}
                     onBlur={(e) => {
-                      const val = Number(e.target.value);
-                      if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                      const val = e.target.value.trim();
+                      if (val === '' || val === '-' || val === '.' || val === '-.') {
                         setCompGain(0);
+                        setCompGainInput('0');
+                      } else {
+                        const numVal = Number(val);
+                        if (isNaN(numVal)) {
+                          setCompGain(0);
+                          setCompGainInput('0');
+                        } else {
+                          const clamped = Math.max(-12, Math.min(12, numVal));
+                          setCompGain(clamped);
+                          setCompGainInput(clamped.toString());
+                        }
                       }
                     }}
                     className="w-16 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -1411,7 +1525,10 @@ export function AudioMasteringPlugin() {
             <div className={`flex flex-col items-center ${!limiterEnabled ? 'pointer-events-none opacity-50' : ''}`}>
               <Knob 
                 value={limiterThreshold} 
-                onChange={setLimiterThreshold}
+                onChange={(val) => {
+                  setLimiterThreshold(val);
+                  setLimiterThresholdInput(val.toString());
+                }}
                 min={-12}
                 max={0}
                 label="CEILING"
@@ -1419,25 +1536,44 @@ export function AudioMasteringPlugin() {
                 defaultValue={-0.3}
               />
               <input
-                type="number"
-                step="0.1"
-                min={-12}
-                max={0}
-                value={limiterThreshold}
+                type="text"
+                inputMode="decimal"
+                value={limiterThresholdInput}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val === '' || val === '-') {
-                    return;
+                  if (val === '' || val === '-' || /^-?\d*\.?\d*$/.test(val)) {
+                    setLimiterThresholdInput(val);
+                    if (val !== '' && val !== '-' && val !== '.' && val !== '-.') {
+                      const numVal = Number(val);
+                      if (!isNaN(numVal)) {
+                        setLimiterThreshold(Math.max(-12, Math.min(0, numVal)));
+                      }
+                    }
                   }
-                  const numVal = Number(val);
-                  if (!isNaN(numVal)) {
-                    setLimiterThreshold(Math.max(-12, Math.min(0, numVal)));
+                }}
+                onFocus={(e) => {
+                  e.target.select();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
                   }
                 }}
                 onBlur={(e) => {
-                  const val = Number(e.target.value);
-                  if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                  const val = e.target.value.trim();
+                  if (val === '' || val === '-' || val === '.' || val === '-.') {
                     setLimiterThreshold(-0.3);
+                    setLimiterThresholdInput('-0.3');
+                  } else {
+                    const numVal = Number(val);
+                    if (isNaN(numVal)) {
+                      setLimiterThreshold(-0.3);
+                      setLimiterThresholdInput('-0.3');
+                    } else {
+                      const clamped = Math.max(-12, Math.min(0, numVal));
+                      setLimiterThreshold(clamped);
+                      setLimiterThresholdInput(clamped.toString());
+                    }
                   }
                 }}
                 className="w-20 mt-2 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
