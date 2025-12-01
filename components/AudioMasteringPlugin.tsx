@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as Sentry from '@sentry/nextjs';
 import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X, Edit, Trash2, Folder, ChevronUp, ChevronDown } from 'lucide-react';
 import { Waveform } from './audio/Waveform';
@@ -138,8 +138,12 @@ export function AudioMasteringPlugin() {
   const [compThreshold, setCompThreshold] = useState(-20);
   const [compThresholdInput, setCompThresholdInput] = useState<string>('-20');
   const [compRatio, setCompRatio] = useState(4);
+  const [compRatioInput, setCompRatioInput] = useState<string>('4');
   const [compAttack, setCompAttack] = useState(10);
   const [compRelease, setCompRelease] = useState(100);
+  const [compReleaseInput, setCompReleaseInput] = useState<string>('100');
+  const compReleaseInputRef = useRef<HTMLInputElement | null>(null);
+  const isCompReleaseInputFocusedRef = useRef(false);
   const [compGain, setCompGain] = useState(0);
   const [compGainInput, setCompGainInput] = useState<string>('0');
   
@@ -274,6 +278,18 @@ export function AudioMasteringPlugin() {
   useEffect(() => {
     setCompThresholdInput(compThreshold.toString());
   }, [compThreshold]);
+
+  useEffect(() => {
+    setCompRatioInput(compRatio.toString());
+  }, [compRatio]);
+
+  useEffect(() => {
+    // Only sync input with compRelease if input is not focused
+    // This prevents interference when user is typing
+    if (!isCompReleaseInputFocusedRef.current) {
+      setCompReleaseInput(compRelease.toString());
+    }
+  }, [compRelease]);
 
   useEffect(() => {
     setCompGainInput(compGain.toString());
@@ -1372,7 +1388,10 @@ export function AudioMasteringPlugin() {
               <div className="flex flex-col items-center">
               <Knob 
                 value={compRatio} 
-                onChange={setCompRatio}
+                onChange={(val) => {
+                  setCompRatio(val);
+                  setCompRatioInput(val.toString());
+                }}
                 min={1}
                 max={20}
                 label="RATIO"
@@ -1381,13 +1400,44 @@ export function AudioMasteringPlugin() {
                 defaultValue={4}
               />
                 <input
-                  type="number"
-                  step="0.1"
-                  value={compRatio}
+                  type="text"
+                  inputMode="decimal"
+                  value={compRatioInput}
                   onChange={(e) => {
-                    const val = Number(e.target.value);
-                    if (!isNaN(val)) {
-                      setCompRatio(Math.max(1, Math.min(20, val)));
+                    const val = e.target.value;
+                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                      setCompRatioInput(val);
+                      if (val !== '' && val !== '.') {
+                        const numVal = Number(val);
+                        if (!isNaN(numVal)) {
+                          setCompRatio(Math.max(1, Math.min(20, numVal)));
+                        }
+                      }
+                    }
+                  }}
+                  onFocus={(e) => {
+                    e.target.select();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value.trim();
+                    if (val === '' || val === '.') {
+                      setCompRatio(4);
+                      setCompRatioInput('4');
+                    } else {
+                      const numVal = Number(val);
+                      if (isNaN(numVal)) {
+                        setCompRatio(4);
+                        setCompRatioInput('4');
+                      } else {
+                        const clamped = Math.max(1, Math.min(20, numVal));
+                        setCompRatio(clamped);
+                        setCompRatioInput(clamped.toString());
+                      }
                     }
                   }}
                   className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -1420,7 +1470,13 @@ export function AudioMasteringPlugin() {
               <div className="flex flex-col items-center">
               <Knob 
                 value={compRelease} 
-                onChange={setCompRelease}
+                onChange={(val) => {
+                  setCompRelease(val);
+                  // Only update input if it's not focused (user is not typing)
+                  if (!isCompReleaseInputFocusedRef.current) {
+                    setCompReleaseInput(val.toString());
+                  }
+                }}
                 min={10}
                 max={1000}
                 label="RELEASE"
@@ -1429,13 +1485,56 @@ export function AudioMasteringPlugin() {
                 defaultValue={100}
               />
                 <input
-                  type="number"
-                  step="1"
-                  value={compRelease}
+                  ref={compReleaseInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  value={compReleaseInput}
                   onChange={(e) => {
-                    const val = Number(e.target.value);
-                    if (!isNaN(val)) {
-                      setCompRelease(Math.max(10, Math.min(1000, val)));
+                    const val = e.target.value;
+                    // Always allow typing - update input state immediately
+                    // Only validate numeric pattern
+                    if (val === '' || /^\d*$/.test(val)) {
+                      setCompReleaseInput(val);
+                      // Update actual value if it's a complete valid number
+                      // Don't clamp here - let user type freely, clamp only on blur
+                      if (val !== '') {
+                        const numVal = Number(val);
+                        if (!isNaN(numVal)) {
+                          // Don't clamp here - allow any number, clamp only on blur
+                          setCompRelease(numVal);
+                        }
+                      }
+                      // If empty, don't update compRelease - let user type freely
+                    }
+                  }}
+                  onFocus={(e) => {
+                    isCompReleaseInputFocusedRef.current = true;
+                    e.target.select();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  onBlur={(e) => {
+                    isCompReleaseInputFocusedRef.current = false;
+                    const val = e.target.value.trim();
+                    if (val === '') {
+                      // Reset to default when empty
+                      setCompRelease(100);
+                      setCompReleaseInput('100');
+                    } else {
+                      const numVal = Number(val);
+                      if (isNaN(numVal) || numVal < 0) {
+                        // Reset to default if invalid
+                        setCompRelease(100);
+                        setCompReleaseInput('100');
+                      } else {
+                        // Clamp to valid range only on blur
+                        const clamped = Math.max(10, Math.min(1000, numVal));
+                        setCompRelease(clamped);
+                        setCompReleaseInput(clamped.toString());
+                      }
                     }
                   }}
                   className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
