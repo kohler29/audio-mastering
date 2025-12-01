@@ -249,7 +249,7 @@ export function AudioMasteringPlugin() {
     }
   }, [isInitialized, updateSettings, getCurrentSettings]);
 
-  // Reset A/B state when new audio file is loaded
+  // Reset Master Bypass state when new audio file is loaded
   useEffect(() => {
     if (audioFile && isInitialized) {
       setIsShowingOriginal(false);
@@ -370,7 +370,7 @@ export function AudioMasteringPlugin() {
     const newState = !isShowingOriginal;
     setIsShowingOriginal(newState);
     toggleMasterBypass(newState);
-    showToast(newState ? 'Showing Original (A)' : 'Showing Mastered (B)', 'info');
+    showToast(newState ? 'Master OFF (Original)' : 'Master ON (Mastered)', 'info');
   };
 
   const handleSeek = (time: number) => {
@@ -973,11 +973,25 @@ export function AudioMasteringPlugin() {
               <input
                 type="number"
                 step="0.1"
+                min={-24}
+                max={24}
                 value={inputGain}
                 onChange={(e) => {
+                  const val = e.target.value;
+                  // Allow empty string and minus sign for typing
+                  if (val === '' || val === '-') {
+                    return; // Let user continue typing
+                  }
+                  const numVal = Number(val);
+                  if (!isNaN(numVal)) {
+                    setInputGain(Math.max(-24, Math.min(24, numVal)));
+                  }
+                }}
+                onBlur={(e) => {
+                  // Ensure valid value on blur
                   const val = Number(e.target.value);
-                  if (!isNaN(val)) {
-                    setInputGain(Math.max(-24, Math.min(24, val)));
+                  if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                    setInputGain(0);
                   }
                 }}
                 className="w-20 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -1015,11 +1029,23 @@ export function AudioMasteringPlugin() {
               <input
                 type="number"
                 step="0.1"
+                min={-24}
+                max={24}
                 value={outputGain}
                 onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || val === '-') {
+                    return;
+                  }
+                  const numVal = Number(val);
+                  if (!isNaN(numVal)) {
+                    setOutputGain(Math.max(-24, Math.min(24, numVal)));
+                  }
+                }}
+                onBlur={(e) => {
                   const val = Number(e.target.value);
-                  if (!isNaN(val)) {
-                    setOutputGain(Math.max(-24, Math.min(24, val)));
+                  if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                    setOutputGain(0);
                   }
                 }}
                 className="w-20 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -1058,6 +1084,32 @@ export function AudioMasteringPlugin() {
               <div className="flex items-center justify-between">
                 <h3 className="text-zinc-400 text-xs tracking-wider">WAVEFORM</h3>
               </div>
+              
+              {/* Master Bypass Toggle - Centered above waveform */}
+              <div className="flex flex-col items-center mb-2">
+                <div className="flex flex-col items-center gap-1 mb-1">
+                  <span className="text-zinc-400 text-xs">Master</span>
+                  <button
+                    onClick={handleToggleAB}
+                    aria-label={isShowingOriginal ? 'Enable Master (ON)' : 'Disable Master (OFF)'}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md ${
+                      isShowingOriginal
+                        ? 'bg-gray-600 hover:bg-gray-500 text-white shadow-gray-600/50'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/50'
+                    }`}
+                    disabled={!audioFile || isLoading}
+                    title={isShowingOriginal ? 'Currently Disabled (OFF) - Click to Enable Master (ON)' : 'Currently Enabled (ON) - Click to Disable Master (OFF)'}
+                  >
+                    {isShowingOriginal ? 'OFF' : 'ON'}
+                  </button>
+                </div>
+                <p className="text-zinc-500 text-xs text-center max-w-xs">
+                  {isShowingOriginal 
+                    ? 'OFF: Menampilkan audio original tanpa efek mastering' 
+                    : 'ON: Menampilkan audio dengan semua efek mastering aktif'}
+                </p>
+              </div>
+              
               <div className="flex flex-wrap items-center gap-2">
                 {/* Playback Controls */}
                 <div className="flex items-center gap-2">
@@ -1087,20 +1139,6 @@ export function AudioMasteringPlugin() {
                     <SkipForward className="w-3 h-3" />
                   </button>
                 </div>
-                {/* A/B Toggle */}
-                <button
-                  onClick={handleToggleAB}
-                  aria-label={isShowingOriginal ? 'Show Mastered (B)' : 'Show Original (A)'}
-                  className={`px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                    isShowingOriginal
-                      ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                      : 'bg-purple-600 hover:bg-purple-500 text-white'
-                  }`}
-                  disabled={!audioFile || isLoading}
-                  title={isShowingOriginal ? 'Currently showing Original (A) - Click to show Mastered (B)' : 'Currently showing Mastered (B) - Click to show Original (A)'}
-                >
-                  {isShowingOriginal ? 'A' : 'B'}
-                </button>
                 {/* Fade Controls */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1">
@@ -1217,11 +1255,23 @@ export function AudioMasteringPlugin() {
                 <input
                   type="number"
                   step="0.1"
+                  min={-60}
+                  max={0}
                   value={compThreshold}
                   onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || val === '-') {
+                      return;
+                    }
+                    const numVal = Number(val);
+                    if (!isNaN(numVal)) {
+                      setCompThreshold(Math.max(-60, Math.min(0, numVal)));
+                    }
+                  }}
+                  onBlur={(e) => {
                     const val = Number(e.target.value);
-                    if (!isNaN(val)) {
-                      setCompThreshold(Math.max(-60, Math.min(0, val)));
+                    if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                      setCompThreshold(-20);
                     }
                   }}
                   className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -1317,11 +1367,23 @@ export function AudioMasteringPlugin() {
                   <input
                     type="number"
                     step="0.1"
+                    min={-12}
+                    max={12}
                     value={compGain}
                     onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || val === '-') {
+                        return;
+                      }
+                      const numVal = Number(val);
+                      if (!isNaN(numVal)) {
+                        setCompGain(Math.max(-12, Math.min(12, numVal)));
+                      }
+                    }}
+                    onBlur={(e) => {
                       const val = Number(e.target.value);
-                      if (!isNaN(val)) {
-                        setCompGain(Math.max(-12, Math.min(12, val)));
+                      if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                        setCompGain(0);
                       }
                     }}
                     className="w-16 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -1359,11 +1421,23 @@ export function AudioMasteringPlugin() {
               <input
                 type="number"
                 step="0.1"
+                min={-12}
+                max={0}
                 value={limiterThreshold}
                 onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || val === '-') {
+                    return;
+                  }
+                  const numVal = Number(val);
+                  if (!isNaN(numVal)) {
+                    setLimiterThreshold(Math.max(-12, Math.min(0, numVal)));
+                  }
+                }}
+                onBlur={(e) => {
                   const val = Number(e.target.value);
-                  if (!isNaN(val)) {
-                    setLimiterThreshold(Math.max(-12, Math.min(0, val)));
+                  if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                    setLimiterThreshold(-0.3);
                   }
                 }}
                 className="w-20 mt-2 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
@@ -1744,10 +1818,10 @@ export function AudioMasteringPlugin() {
 
               <div className="bg-cyan-900/20 border border-cyan-700/50 rounded-lg p-4">
                 <h3 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-lg">✨</span> A/B Comparison Feature
+                  <span className="text-lg">✨</span> Master Bypass Feature
                 </h3>
                 <p className="text-zinc-300 text-sm leading-relaxed">
-                  Compare your audio before and after mastering in real-time! Click the <span className="font-semibold text-cyan-400">A/B button</span> next to the play controls to switch between original (A) and mastered (B) audio instantly.
+                  Compare your audio before and after mastering in real-time! Click the <span className="font-semibold text-cyan-400">ON/Bypass button</span> above the waveform to switch between original (Bypass) and mastered (ON) audio instantly.
                 </p>
               </div>
 

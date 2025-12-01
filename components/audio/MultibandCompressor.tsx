@@ -792,22 +792,34 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
               }}
               disabled={!enabled}
             />
-            <div className="flex items-center gap-1 mt-1">
-              <input
-                type="number"
-                step="0.1"
-                value={bands[selectedBand].threshold}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  if (!isNaN(val)) {
-                    updateThreshold(selectedBand, Math.max(-60, Math.min(0, val)));
-                  }
-                }}
-                className="w-20 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
-                disabled={!enabled}
-              />
-              <span className="text-xs text-cyan-400">dB</span>
-            </div>
+              <div className="flex items-center gap-1 mt-1">
+                <input
+                  type="number"
+                  step="0.1"
+                  min={-60}
+                  max={0}
+                  value={bands[selectedBand].threshold}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || val === '-') {
+                      return;
+                    }
+                    const numVal = Number(val);
+                    if (!isNaN(numVal)) {
+                      updateThreshold(selectedBand, Math.max(-60, Math.min(0, numVal)));
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const val = Number(e.target.value);
+                    if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                      updateThreshold(selectedBand, -20);
+                    }
+                  }}
+                  className="w-20 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+                  disabled={!enabled}
+                />
+                <span className="text-xs text-cyan-400">dB</span>
+              </div>
           </div>
 
           {/* Ratio */}
@@ -860,22 +872,34 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
               }}
               disabled={!enabled}
             />
-            <div className="flex items-center gap-1 mt-1">
-              <input
-                type="number"
-                step="0.1"
-                value={bands[selectedBand].gain}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  if (!isNaN(val)) {
-                    updateGain(selectedBand, Math.max(-12, Math.min(12, val)));
-                  }
-                }}
-                className="w-20 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
-                disabled={!enabled}
-              />
-              <span className="text-xs text-cyan-400">dB</span>
-            </div>
+              <div className="flex items-center gap-1 mt-1">
+                <input
+                  type="number"
+                  step="0.1"
+                  min={-12}
+                  max={12}
+                  value={bands[selectedBand].gain}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || val === '-') {
+                      return;
+                    }
+                    const numVal = Number(val);
+                    if (!isNaN(numVal)) {
+                      updateGain(selectedBand, Math.max(-12, Math.min(12, numVal)));
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const val = Number(e.target.value);
+                    if (isNaN(val) || e.target.value === '' || e.target.value === '-') {
+                      updateGain(selectedBand, 0);
+                    }
+                  }}
+                  className="w-20 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+                  disabled={!enabled}
+                />
+                <span className="text-xs text-cyan-400">dB</span>
+              </div>
           </div>
         </div>
       </div>
