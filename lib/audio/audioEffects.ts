@@ -547,6 +547,22 @@ export function calculateCompressorGainReduction(
   return gainReduction;
 }
 
+// Calculate limiter gain reduction (for visualization)
+// Limiter uses ratio of 20:1 (brickwall), so it's essentially infinite ratio
+export function calculateLimiterGainReduction(
+  inputLevel: number,
+  threshold: number
+): number {
+  if (inputLevel <= threshold) {
+    return 0;
+  }
+
+  // For limiter with ratio 20:1 (brickwall), gain reduction = overThreshold
+  // This prevents signal from exceeding threshold
+  const overThreshold = inputLevel - threshold;
+  return overThreshold;
+}
+
 // Stereo width calculation
 export function calculateStereoWidth(width: number): { midGain: number; sideGain: number } {
   const widthValue = width / 100;

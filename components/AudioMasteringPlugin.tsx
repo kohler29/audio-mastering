@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import * as Sentry from '@sentry/nextjs';
-import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X, Edit, Trash2, Folder } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X, Edit, Trash2, Folder, ChevronUp, ChevronDown } from 'lucide-react';
 import { Waveform } from './audio/Waveform';
 import { SpectrumAnalyzer } from './audio/SpectrumAnalyzer';
 import { Knob } from './audio/Knob';
@@ -15,7 +15,7 @@ import { useAudioEngine } from '@/hooks/useAudioEngine';
 import { usePresets, type PresetSettings } from '@/hooks/usePresets';
 import { useAuth } from '@/hooks/useAuth';
 import { AudioEngineSettings } from '@/lib/audio/audioEngine';
-import { effectPresets } from '@/lib/audio/audioEffects';
+import { effectPresets, calculateLimiterGainReduction } from '@/lib/audio/audioEffects';
 import { ToastContainer, type Toast } from '@/components/ui/Toast';
 
 
@@ -157,7 +157,7 @@ export function AudioMasteringPlugin() {
   
   // Vintage Drive states
   
-  const presetNames = [
+  const presetNames = useMemo(() => [
     'Default', 
     'Mastering', 
     'Loud', 
@@ -178,7 +178,7 @@ export function AudioMasteringPlugin() {
     'Electronic',
     'Acoustic',
     'Cinematic',
-  ];
+  ], []);
   const [selectedPreset, setSelectedPreset] = useState('default');
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 
@@ -394,7 +394,105 @@ export function AudioMasteringPlugin() {
     }
   };
 
-  const handlePresetChange = async (value: string) => {
+  // Get all available presets in order (built-in + database presets)
+  const getAllPresets = useCallback(() => {
+    const allPresets: Array<{ type: 'built-in' | 'db'; id: string; name: string; value: string }> = [];
+    
+    // Add built-in presets
+    presetNames.forEach(name => {
+      allPresets.push({
+        type: 'built-in',
+        id: name.toLowerCase(),
+        name,
+        value: name.toLowerCase(),
+      });
+    });
+    
+    // Add user's own presets
+    const myPresets = dbPresets.filter(p => p.userId === user?.id);
+    const folders = Array.from(new Set(myPresets.map(p => p.folder).filter((f): f is string => f !== null)));
+    folders.sort();
+    
+    myPresets.filter(p => !p.folder).forEach(preset => {
+      allPresets.push({
+        type: 'db',
+        id: preset.id,
+        name: preset.name,
+        value: `db-${preset.id}`,
+      });
+    });
+    
+    folders.forEach(folder => {
+      myPresets.filter(p => p.folder === folder).forEach(preset => {
+        allPresets.push({
+          type: 'db',
+          id: preset.id,
+          name: preset.name,
+          value: `db-${preset.id}`,
+        });
+      });
+    });
+    
+    // Add published presets from others
+    dbPresets.filter(p => p.isPublic && p.userId !== user?.id).forEach(preset => {
+      allPresets.push({
+        type: 'db',
+        id: preset.id,
+        name: `${preset.name} by ${preset.user?.username || 'Unknown'}`,
+        value: `db-${preset.id}`,
+      });
+    });
+    
+    return allPresets;
+  }, [dbPresets, user?.id, presetNames]);
+
+  const applyPresetSettings = useCallback((settings: Partial<AudioEngineSettings> | PresetSettings) => {
+    setCompressorEnabled(true);
+    setLimiterEnabled(true);
+    setStereoEnabled(true);
+    setReverbEnabled(false);
+    
+    if (settings.inputGain !== undefined) setInputGain(settings.inputGain);
+    if (settings.outputGain !== undefined) setOutputGain(settings.outputGain);
+    
+    if (settings.compressor) {
+      if (settings.compressor.enabled !== undefined) setCompressorEnabled(settings.compressor.enabled);
+      if (settings.compressor.threshold !== undefined) setCompThreshold(settings.compressor.threshold);
+      if (settings.compressor.ratio !== undefined) setCompRatio(settings.compressor.ratio);
+      if (settings.compressor.attack !== undefined) setCompAttack(settings.compressor.attack);
+      if (settings.compressor.release !== undefined) setCompRelease(settings.compressor.release);
+      if (settings.compressor.gain !== undefined) setCompGain(settings.compressor.gain);
+    }
+    if (settings.limiter) {
+      if (settings.limiter.enabled !== undefined) setLimiterEnabled(settings.limiter.enabled);
+      if (settings.limiter.threshold !== undefined) setLimiterThreshold(settings.limiter.threshold);
+    }
+    if (settings.stereoWidth) {
+      if (settings.stereoWidth.enabled !== undefined) setStereoEnabled(settings.stereoWidth.enabled);
+      if (settings.stereoWidth.width !== undefined) setStereoWidth(settings.stereoWidth.width);
+    }
+    // Abaikan HAAS dari preset hingga pengembangan ulang
+    // Harmonizer, reverb, dan saturation diabaikan untuk semua preset
+    if (settings.multibandCompressor) {
+      if (settings.multibandCompressor.enabled !== undefined) setMultibandEnabled(settings.multibandCompressor.enabled);
+      if (settings.multibandCompressor.bands) {
+        // Map bands to include color property
+        const colors = ['rgb(239, 68, 68)', 'rgb(234, 179, 8)', 'rgb(34, 197, 94)', 'rgb(59, 130, 246)', 'rgb(168, 85, 247)'];
+        const bandsWithColor = settings.multibandCompressor.bands.map((band, index) => ({
+          ...band,
+          color: 'color' in band && typeof band.color === 'string' ? band.color : colors[index % colors.length],
+        }));
+        setMultibandBands(bandsWithColor);
+      }
+    }
+  }, []);
+
+  const showToast = useCallback((message: string, type: Toast['type'] = 'success') => {
+    const id = Date.now().toString();
+    setToasts((prev) => [...prev, { id, message, type }]);
+  }, []);
+
+  const handlePresetChange = useCallback(async (value: string) => {
     // Check if it's a database preset (starts with "db-")
     if (value.startsWith('db-')) {
       const presetId = value.replace('db-', '');
@@ -455,53 +553,30 @@ export function AudioMasteringPlugin() {
         applyPresetSettings(convertedSettings);
       }
     }
-  };
+  }, [loadPreset, applyPresetSettings, showToast]);
 
-  const applyPresetSettings = (settings: Partial<AudioEngineSettings> | PresetSettings) => {
-    setCompressorEnabled(true);
-    setLimiterEnabled(true);
-    setStereoEnabled(true);
-    setReverbEnabled(false);
+  const handlePresetNavigate = useCallback((direction: 'next' | 'prev') => {
+    const allPresets = getAllPresets();
+    if (allPresets.length === 0) return;
     
-    if (settings.inputGain !== undefined) setInputGain(settings.inputGain);
-    if (settings.outputGain !== undefined) setOutputGain(settings.outputGain);
+    const currentValue = selectedPresetId ? `db-${selectedPresetId}` : selectedPreset;
+    const currentIndex = allPresets.findIndex(p => p.value === currentValue);
     
-    if (settings.compressor) {
-      if (settings.compressor.enabled !== undefined) setCompressorEnabled(settings.compressor.enabled);
-      if (settings.compressor.threshold !== undefined) setCompThreshold(settings.compressor.threshold);
-      if (settings.compressor.ratio !== undefined) setCompRatio(settings.compressor.ratio);
-      if (settings.compressor.attack !== undefined) setCompAttack(settings.compressor.attack);
-      if (settings.compressor.release !== undefined) setCompRelease(settings.compressor.release);
-      if (settings.compressor.gain !== undefined) setCompGain(settings.compressor.gain);
+    if (currentIndex === -1) {
+      // If current preset not found, start from first
+      handlePresetChange(allPresets[0].value);
+      return;
     }
-    if (settings.limiter) {
-      if (settings.limiter.enabled !== undefined) setLimiterEnabled(settings.limiter.enabled);
-      if (settings.limiter.threshold !== undefined) setLimiterThreshold(settings.limiter.threshold);
+    
+    let newIndex: number;
+    if (direction === 'next') {
+      newIndex = (currentIndex + 1) % allPresets.length;
+    } else {
+      newIndex = currentIndex === 0 ? allPresets.length - 1 : currentIndex - 1;
     }
-    if (settings.stereoWidth) {
-      if (settings.stereoWidth.enabled !== undefined) setStereoEnabled(settings.stereoWidth.enabled);
-      if (settings.stereoWidth.width !== undefined) setStereoWidth(settings.stereoWidth.width);
-    }
-    // Abaikan HAAS dari preset hingga pengembangan ulang
-    // Harmonizer, reverb, dan saturation diabaikan untuk semua preset
-    if (settings.multibandCompressor) {
-      if (settings.multibandCompressor.enabled !== undefined) setMultibandEnabled(settings.multibandCompressor.enabled);
-      if (settings.multibandCompressor.bands) {
-        // Map bands to include color property
-        const colors = ['rgb(239, 68, 68)', 'rgb(234, 179, 8)', 'rgb(34, 197, 94)', 'rgb(59, 130, 246)', 'rgb(168, 85, 247)'];
-        const bandsWithColor = settings.multibandCompressor.bands.map((band, index) => ({
-          ...band,
-          color: 'color' in band && typeof band.color === 'string' ? band.color : colors[index % colors.length],
-        }));
-        setMultibandBands(bandsWithColor);
-      }
-    }
-  };
-
-  const showToast = (message: string, type: Toast['type'] = 'success') => {
-    const id = Date.now().toString();
-    setToasts((prev) => [...prev, { id, message, type }]);
-  };
+    
+    handlePresetChange(allPresets[newIndex].value);
+  }, [selectedPresetId, selectedPreset, getAllPresets, handlePresetChange]);
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
@@ -757,7 +832,15 @@ export function AudioMasteringPlugin() {
             <span className="text-sm">Export</span>
           </button>
 
-          <div className="relative flex items-center gap-2">
+          <div className="relative flex items-center gap-1">
+            <button
+              onClick={() => handlePresetNavigate('prev')}
+              disabled={presetsLoading}
+              className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-1.5 rounded-lg border border-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Preset Sebelumnya (↑)"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
             <select 
               value={selectedPresetId ? `db-${selectedPresetId}` : selectedPreset}
               onChange={(e) => handlePresetChange(e.target.value)}
@@ -810,6 +893,14 @@ export function AudioMasteringPlugin() {
                 </optgroup>
               )}
             </select>
+            <button
+              onClick={() => handlePresetNavigate('next')}
+              disabled={presetsLoading}
+              className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-1.5 rounded-lg border border-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Preset Berikutnya (↓)"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
             {selectedPresetId && dbPresets.find(p => p.id === selectedPresetId && p.userId === user?.id) && (
               <div className="flex gap-1">
                 <button
@@ -877,6 +968,21 @@ export function AudioMasteringPlugin() {
               label="GAIN"
               unit="dB"
             />
+            <div className="mt-2 flex justify-center">
+              <input
+                type="number"
+                step="0.1"
+                value={inputGain}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (!isNaN(val)) {
+                    setInputGain(Math.max(-24, Math.min(24, val)));
+                  }
+                }}
+                className="w-20 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+              />
+              <span className="text-zinc-500 text-xs ml-1 self-center">dB</span>
+            </div>
           </div>
           
           <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
@@ -903,6 +1009,21 @@ export function AudioMasteringPlugin() {
               label="GAIN"
               unit="dB"
             />
+            <div className="mt-2 flex justify-center">
+              <input
+                type="number"
+                step="0.1"
+                value={outputGain}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (!isNaN(val)) {
+                    setOutputGain(Math.max(-24, Math.min(24, val)));
+                  }
+                }}
+                className="w-20 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+              />
+              <span className="text-zinc-500 text-xs ml-1 self-center">dB</span>
+            </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
               <div>
                 <label className="text-zinc-400 text-xs block mb-1">Target LUFS</label>
@@ -1080,42 +1201,98 @@ export function AudioMasteringPlugin() {
               </button>
             </div>
             <div className={`grid grid-cols-2 gap-4 ${!compressorEnabled ? 'pointer-events-none opacity-50' : ''}`}>
-              <Knob 
-                value={compThreshold} 
-                onChange={setCompThreshold}
-                min={-60}
-                max={0}
-                label="THRESHOLD"
-                unit="dB"
-                size="small"
-              />
-              <Knob 
-                value={compRatio} 
-                onChange={setCompRatio}
-                min={1}
-                max={20}
-                label="RATIO"
-                unit=":1"
-                size="small"
-              />
-              <Knob 
-                value={compAttack} 
-                onChange={setCompAttack}
-                min={0.1}
-                max={100}
-                label="ATTACK"
-                unit="ms"
-                size="small"
-              />
-              <Knob 
-                value={compRelease} 
-                onChange={setCompRelease}
-                min={10}
-                max={1000}
-                label="RELEASE"
-                unit="ms"
-                size="small"
-              />
+              <div className="flex flex-col items-center">
+                <Knob 
+                  value={compThreshold} 
+                  onChange={setCompThreshold}
+                  min={-60}
+                  max={0}
+                  label="THRESHOLD"
+                  unit="dB"
+                  size="small"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  value={compThreshold}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    if (!isNaN(val)) {
+                      setCompThreshold(Math.max(-60, Math.min(0, val)));
+                    }
+                  }}
+                  className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+                />
+              </div>
+              <div className="flex flex-col items-center">
+                <Knob 
+                  value={compRatio} 
+                  onChange={setCompRatio}
+                  min={1}
+                  max={20}
+                  label="RATIO"
+                  unit=":1"
+                  size="small"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  value={compRatio}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    if (!isNaN(val)) {
+                      setCompRatio(Math.max(1, Math.min(20, val)));
+                    }
+                  }}
+                  className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+                />
+              </div>
+              <div className="flex flex-col items-center">
+                <Knob 
+                  value={compAttack} 
+                  onChange={setCompAttack}
+                  min={0.1}
+                  max={100}
+                  label="ATTACK"
+                  unit="ms"
+                  size="small"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  value={compAttack}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    if (!isNaN(val)) {
+                      setCompAttack(Math.max(0.1, Math.min(100, val)));
+                    }
+                  }}
+                  className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+                />
+              </div>
+              <div className="flex flex-col items-center">
+                <Knob 
+                  value={compRelease} 
+                  onChange={setCompRelease}
+                  min={10}
+                  max={1000}
+                  label="RELEASE"
+                  unit="ms"
+                  size="small"
+                />
+                <input
+                  type="number"
+                  step="1"
+                  value={compRelease}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    if (!isNaN(val)) {
+                      setCompRelease(Math.max(10, Math.min(1000, val)));
+                    }
+                  }}
+                  className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+                />
+              </div>
             </div>
             <div className="mt-3 pt-3 border-t border-zinc-700">
               <div className="flex items-center justify-between">
@@ -1129,6 +1306,18 @@ export function AudioMasteringPlugin() {
                     label=""
                     unit="dB"
                     size="small"
+                  />
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={compGain}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (!isNaN(val)) {
+                        setCompGain(Math.max(-12, Math.min(12, val)));
+                      }
+                    }}
+                    className="w-16 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
                   />
                 </div>
               </div>
@@ -1150,7 +1339,7 @@ export function AudioMasteringPlugin() {
                 {limiterEnabled ? 'ON' : 'OFF'}
               </button>
             </div>
-            <div className={`flex justify-center ${!limiterEnabled ? 'pointer-events-none opacity-50' : ''}`}>
+            <div className={`flex flex-col items-center ${!limiterEnabled ? 'pointer-events-none opacity-50' : ''}`}>
               <Knob 
                 value={limiterThreshold} 
                 onChange={setLimiterThreshold}
@@ -1159,11 +1348,33 @@ export function AudioMasteringPlugin() {
                 label="CEILING"
                 unit="dB"
               />
+              <input
+                type="number"
+                step="0.1"
+                value={limiterThreshold}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (!isNaN(val)) {
+                    setLimiterThreshold(Math.max(-12, Math.min(0, val)));
+                  }
+                }}
+                className="w-20 mt-2 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+              />
             </div>
             <div className="mt-3 pt-3 border-t border-zinc-700">
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 text-xs">Reduction</span>
-                <span className="text-red-400 text-xs">-1.5 dB</span>
+                <span className="text-red-400 text-xs">
+                  {(() => {
+                    if (!limiterEnabled || !analysisData) return '0.0 dB';
+                    // Calculate peak level from analysis data
+                    const peakLeft = analysisData.vuLeft;
+                    const peakRight = analysisData.vuRight;
+                    const peakLevel = Math.max(peakLeft, peakRight);
+                    const reduction = calculateLimiterGainReduction(peakLevel, limiterThreshold);
+                    return reduction > 0 ? `-${reduction.toFixed(1)} dB` : '0.0 dB';
+                  })()}
+                </span>
               </div>
             </div>
           </div>
@@ -1183,7 +1394,7 @@ export function AudioMasteringPlugin() {
                 {stereoEnabled ? 'ON' : 'OFF'}
               </button>
             </div>
-            <div className={`flex justify-center ${!stereoEnabled ? 'pointer-events-none opacity-50' : ''}`}>
+            <div className={`flex flex-col items-center ${!stereoEnabled ? 'pointer-events-none opacity-50' : ''}`}>
               <Knob 
                 value={stereoWidth} 
                 onChange={setStereoWidth}
@@ -1191,6 +1402,18 @@ export function AudioMasteringPlugin() {
                 max={200}
                 label="WIDTH"
                 unit="%"
+              />
+              <input
+                type="number"
+                step="1"
+                value={stereoWidth}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (!isNaN(val)) {
+                    setStereoWidth(Math.max(0, Math.min(200, val)));
+                  }
+                }}
+                className="w-20 mt-2 bg-zinc-700 text-zinc-100 px-2 py-1 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
               />
             </div>
           </div>

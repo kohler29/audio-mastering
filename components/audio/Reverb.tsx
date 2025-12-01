@@ -32,42 +32,98 @@ export function Reverb({ enabled, onToggle, mix, setMix, size, setSize, decay, s
         </button>
       </div>
       <div className={`grid grid-cols-2 gap-4 ${!enabled ? 'pointer-events-none opacity-50' : ''}`}>
-        <Knob 
-          value={mix} 
-          onChange={setMix}
-          min={0}
-          max={100}
-          label="MIX"
-          unit="%"
-          size="small"
-        />
-        <Knob 
-          value={size} 
-          onChange={setSize}
-          min={0}
-          max={100}
-          label="SIZE"
-          unit="%"
-          size="small"
-        />
-        <Knob 
-          value={decay} 
-          onChange={setDecay}
-          min={0.1}
-          max={10}
-          label="DECAY"
-          unit="s"
-          size="small"
-        />
-        <Knob 
-          value={damping} 
-          onChange={setDamping}
-          min={0}
-          max={100}
-          label="DAMPING"
-          unit="%"
-          size="small"
-        />
+        <div className="flex flex-col items-center">
+          <Knob 
+            value={mix} 
+            onChange={setMix}
+            min={0}
+            max={100}
+            label="MIX"
+            unit="%"
+            size="small"
+          />
+          <input
+            type="number"
+            step="1"
+            value={mix}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              if (!isNaN(val)) {
+                setMix(Math.max(0, Math.min(100, val)));
+              }
+            }}
+            className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+          />
+        </div>
+        <div className="flex flex-col items-center">
+          <Knob 
+            value={size} 
+            onChange={setSize}
+            min={0}
+            max={100}
+            label="SIZE"
+            unit="%"
+            size="small"
+          />
+          <input
+            type="number"
+            step="1"
+            value={size}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              if (!isNaN(val)) {
+                setSize(Math.max(0, Math.min(100, val)));
+              }
+            }}
+            className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+          />
+        </div>
+        <div className="flex flex-col items-center">
+          <Knob 
+            value={decay} 
+            onChange={setDecay}
+            min={0.1}
+            max={10}
+            label="DECAY"
+            unit="s"
+            size="small"
+          />
+          <input
+            type="number"
+            step="0.1"
+            value={decay}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              if (!isNaN(val)) {
+                setDecay(Math.max(0.1, Math.min(10, val)));
+              }
+            }}
+            className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+          />
+        </div>
+        <div className="flex flex-col items-center">
+          <Knob 
+            value={damping} 
+            onChange={setDamping}
+            min={0}
+            max={100}
+            label="DAMPING"
+            unit="%"
+            size="small"
+          />
+          <input
+            type="number"
+            step="1"
+            value={damping}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              if (!isNaN(val)) {
+                setDamping(Math.max(0, Math.min(100, val)));
+              }
+            }}
+            className="w-16 mt-1 bg-zinc-700 text-zinc-100 px-1.5 py-0.5 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs text-center"
+          />
+        </div>
       </div>
       <div className="mt-3 pt-3 border-t border-zinc-700">
         <div className="grid grid-cols-3 gap-2">
