@@ -967,6 +967,7 @@ export function AudioMasteringPlugin() {
               max={24}
               label="GAIN"
               unit="dB"
+              defaultValue={0}
             />
             <div className="mt-2 flex justify-center">
               <input
@@ -1008,6 +1009,7 @@ export function AudioMasteringPlugin() {
               max={24}
               label="GAIN"
               unit="dB"
+              defaultValue={0}
             />
             <div className="mt-2 flex justify-center">
               <input
@@ -1202,15 +1204,16 @@ export function AudioMasteringPlugin() {
             </div>
             <div className={`grid grid-cols-2 gap-4 ${!compressorEnabled ? 'pointer-events-none opacity-50' : ''}`}>
               <div className="flex flex-col items-center">
-                <Knob 
-                  value={compThreshold} 
-                  onChange={setCompThreshold}
-                  min={-60}
-                  max={0}
-                  label="THRESHOLD"
-                  unit="dB"
-                  size="small"
-                />
+              <Knob 
+                value={compThreshold} 
+                onChange={setCompThreshold}
+                min={-60}
+                max={0}
+                label="THRESHOLD"
+                unit="dB"
+                size="small"
+                defaultValue={-20}
+              />
                 <input
                   type="number"
                   step="0.1"
@@ -1225,15 +1228,16 @@ export function AudioMasteringPlugin() {
                 />
               </div>
               <div className="flex flex-col items-center">
-                <Knob 
-                  value={compRatio} 
-                  onChange={setCompRatio}
-                  min={1}
-                  max={20}
-                  label="RATIO"
-                  unit=":1"
-                  size="small"
-                />
+              <Knob 
+                value={compRatio} 
+                onChange={setCompRatio}
+                min={1}
+                max={20}
+                label="RATIO"
+                unit=":1"
+                size="small"
+                defaultValue={4}
+              />
                 <input
                   type="number"
                   step="0.1"
@@ -1248,15 +1252,16 @@ export function AudioMasteringPlugin() {
                 />
               </div>
               <div className="flex flex-col items-center">
-                <Knob 
-                  value={compAttack} 
-                  onChange={setCompAttack}
-                  min={0.1}
-                  max={100}
-                  label="ATTACK"
-                  unit="ms"
-                  size="small"
-                />
+              <Knob 
+                value={compAttack} 
+                onChange={setCompAttack}
+                min={0.1}
+                max={100}
+                label="ATTACK"
+                unit="ms"
+                size="small"
+                defaultValue={10}
+              />
                 <input
                   type="number"
                   step="0.1"
@@ -1271,15 +1276,16 @@ export function AudioMasteringPlugin() {
                 />
               </div>
               <div className="flex flex-col items-center">
-                <Knob 
-                  value={compRelease} 
-                  onChange={setCompRelease}
-                  min={10}
-                  max={1000}
-                  label="RELEASE"
-                  unit="ms"
-                  size="small"
-                />
+              <Knob 
+                value={compRelease} 
+                onChange={setCompRelease}
+                min={10}
+                max={1000}
+                label="RELEASE"
+                unit="ms"
+                size="small"
+                defaultValue={100}
+              />
                 <input
                   type="number"
                   step="1"
@@ -1306,6 +1312,7 @@ export function AudioMasteringPlugin() {
                     label=""
                     unit="dB"
                     size="small"
+                    defaultValue={0}
                   />
                   <input
                     type="number"
@@ -1347,6 +1354,7 @@ export function AudioMasteringPlugin() {
                 max={0}
                 label="CEILING"
                 unit="dB"
+                defaultValue={-0.3}
               />
               <input
                 type="number"
@@ -1402,6 +1410,7 @@ export function AudioMasteringPlugin() {
                 max={200}
                 label="WIDTH"
                 unit="%"
+                defaultValue={100}
               />
               <input
                 type="number"

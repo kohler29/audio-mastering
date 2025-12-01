@@ -41,6 +41,7 @@ export function Reverb({ enabled, onToggle, mix, setMix, size, setSize, decay, s
             label="MIX"
             unit="%"
             size="small"
+            defaultValue={20}
           />
           <input
             type="number"
@@ -64,6 +65,7 @@ export function Reverb({ enabled, onToggle, mix, setMix, size, setSize, decay, s
             label="SIZE"
             unit="%"
             size="small"
+            defaultValue={50}
           />
           <input
             type="number"
@@ -87,6 +89,7 @@ export function Reverb({ enabled, onToggle, mix, setMix, size, setSize, decay, s
             label="DECAY"
             unit="s"
             size="small"
+            defaultValue={2.5}
           />
           <input
             type="number"
@@ -110,6 +113,7 @@ export function Reverb({ enabled, onToggle, mix, setMix, size, setSize, decay, s
             label="DAMPING"
             unit="%"
             size="small"
+            defaultValue={50}
           />
           <input
             type="number"

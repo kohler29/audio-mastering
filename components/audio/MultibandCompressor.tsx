@@ -273,14 +273,38 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { 
+      alpha: true,
+      desynchronized: true, // Better performance
+      willReadFrequently: false 
+    });
     if (!ctx) return;
 
-    const animate = () => {
+    // Enable anti-aliasing for smoother graphics
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    let lastTime = performance.now();
+    const targetFPS = 60;
+    const frameInterval = 1000 / targetFPS;
+
+    const animate = (currentTime: number) => {
+      const deltaTime = currentTime - lastTime;
+      
+      // Frame rate limiting untuk smooth animation
+      if (deltaTime < frameInterval) {
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      
+      lastTime = currentTime - (deltaTime % frameInterval);
+
       const rect = canvas.getBoundingClientRect();
       const width = rect.width;
       const height = rect.height;
 
+      // Use save/restore untuk better performance
+      ctx.save();
       ctx.clearRect(0, 0, width, height);
 
       // Draw background grid
@@ -315,10 +339,38 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
         ctx.stroke();
       });
 
-      // Simulate gain reduction animation
+      // Simulate gain reduction animation dengan smoothing yang lebih baik
+      // Menggunakan exponential moving average dengan adaptive smoothing
+      const smoothingFactor = 0.92; // Lebih smooth (0.92 = lebih lambat decay, lebih smooth)
+      const attackFactor = 0.25; // Lebih cepat attack
+      
       gainReductionRef.current = gainReductionRef.current.map((val, i) => {
-        const target = bands[i].active ? Math.random() * 6 : 0;
-        return val * 0.85 + target * 0.15;
+        if (!bands[i].active) {
+          // Smooth decay to zero when inactive
+          return val * 0.9;
+        }
+        
+        // Simulate realistic gain reduction dengan noise yang lebih natural
+        // Menggunakan perlin-like noise untuk lebih smooth
+        const time = currentTime * 0.001;
+        const noise = Math.sin(time * 2 + i * 0.5) * 0.5 + 
+                     Math.sin(time * 3.7 + i * 0.3) * 0.3 +
+                     Math.sin(time * 7.3 + i * 0.7) * 0.2;
+        const normalizedNoise = (noise + 1) * 0.5; // Normalize to 0-1
+        
+        // Calculate target based on threshold (lebih banyak compression = lebih banyak GR)
+        const thresholdFactor = Math.max(0, (bands[i].threshold + 60) / 60);
+        const maxGR = thresholdFactor * 8; // Max gain reduction based on threshold
+        const target = normalizedNoise * maxGR;
+        
+        // Exponential moving average dengan different rates untuk attack/decay
+        if (target > val) {
+          // Attack: lebih cepat
+          return val * (1 - attackFactor) + target * attackFactor;
+        } else {
+          // Decay: lebih smooth
+          return val * smoothingFactor + target * (1 - smoothingFactor);
+        }
       });
 
       // Draw each band
@@ -378,79 +430,118 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
         ctx.fillStyle = gradient;
         ctx.fillRect(x1, thresholdY, bandWidth, compressionHeight);
 
-        // Draw threshold line with hover effect
+        // Draw threshold line with hover effect (optimized)
         const isThresholdHovered = hoveredElement.type === 'threshold' && hoveredElement.index === index;
         const isThresholdDragging = dragStateRef.current.isDragging && dragStateRef.current.type === 'threshold' && dragStateRef.current.bandIndex === index;
         
+        ctx.save(); // Save state untuk threshold line
         ctx.strokeStyle = band.color;
         ctx.lineWidth = isThresholdHovered || isThresholdDragging ? 3 : 2;
         ctx.setLineDash(isThresholdHovered || isThresholdDragging ? [6, 3] : [4, 4]);
-        ctx.shadowColor = isThresholdHovered || isThresholdDragging ? band.color : 'transparent';
-        ctx.shadowBlur = isThresholdHovered || isThresholdDragging ? 10 : 0;
+        ctx.lineCap = 'round'; // Smooth line caps
+        ctx.lineJoin = 'round';
+        
+        if (isThresholdHovered || isThresholdDragging) {
+          ctx.shadowColor = band.color;
+          ctx.shadowBlur = 12;
+        }
         
         ctx.beginPath();
         ctx.moveTo(x1, thresholdY);
         ctx.lineTo(x2, thresholdY);
         ctx.stroke();
         
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.setLineDash([]);
+        ctx.restore(); // Restore state
 
-        // Draw threshold handle circles on hover/drag
+        // Draw threshold handle circles on hover/drag (optimized dengan gradient)
         if (isThresholdHovered || isThresholdDragging) {
           const handleX = x1 + bandWidth / 2;
-          ctx.fillStyle = band.color;
-          ctx.beginPath();
-          ctx.arc(handleX, thresholdY, 6, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-
-        // Draw animated gain reduction bars
-        const grHeight = (gainReductionRef.current[index] / 60) * height;
-        const barCount = Math.max(8, Math.floor(bandWidth / 12));
-        const barWidth = (bandWidth - 4) / barCount;
-        
-        for (let i = 0; i < barCount; i++) {
-          const randomVariation = Math.random() * 0.3 + 0.7;
-          const barH = grHeight * randomVariation;
+          const handleRadius = isThresholdDragging ? 7 : 6;
           
-          const barGradient = ctx.createLinearGradient(0, height - barH, 0, height);
-          barGradient.addColorStop(0, band.color);
-          const rgbMatch2 = band.color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-          if (rgbMatch2) {
-            barGradient.addColorStop(1, `rgba(${rgbMatch2[1]}, ${rgbMatch2[2]}, ${rgbMatch2[3]}, 0.3)`);
+          // Create radial gradient untuk 3D effect
+          const handleGradient = ctx.createRadialGradient(
+            handleX - 2, thresholdY - 2, 0,
+            handleX, thresholdY, handleRadius
+          );
+          const rgbMatch3 = band.color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+          if (rgbMatch3) {
+            handleGradient.addColorStop(0, `rgba(${rgbMatch3[1]}, ${rgbMatch3[2]}, ${rgbMatch3[3]}, 1)`);
+            handleGradient.addColorStop(0.7, band.color);
+            handleGradient.addColorStop(1, `rgba(${rgbMatch3[1]}, ${rgbMatch3[2]}, ${rgbMatch3[3]}, 0.6)`);
+          } else {
+            handleGradient.addColorStop(0, 'rgba(6, 255, 255, 1)');
+            handleGradient.addColorStop(1, band.color);
           }
           
-          ctx.fillStyle = barGradient;
-          ctx.fillRect(
-            x1 + 2 + i * barWidth,
-            height - barH,
-            barWidth - 1,
-            barH
-          );
+          ctx.save();
+          ctx.fillStyle = handleGradient;
+          ctx.beginPath();
+          ctx.arc(handleX, thresholdY, handleRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
         }
 
-        // Draw crossover divider (except for first band)
+        // Draw animated gain reduction bars dengan optimasi
+        const grHeight = Math.max(0, (gainReductionRef.current[index] / 60) * height);
+        
+        if (grHeight > 0) {
+          // Optimize bar count berdasarkan width
+          const barCount = Math.max(6, Math.min(20, Math.floor(bandWidth / 10)));
+          const barSpacing = 2;
+          const totalSpacing = barSpacing * (barCount - 1);
+          const barWidth = (bandWidth - 4 - totalSpacing) / barCount;
+          
+          // Pre-calculate gradient untuk performance
+          const barGradient = ctx.createLinearGradient(0, height - grHeight, 0, height);
+          const rgbMatch2 = band.color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+          if (rgbMatch2) {
+            barGradient.addColorStop(0, band.color);
+            barGradient.addColorStop(0.5, `rgba(${rgbMatch2[1]}, ${rgbMatch2[2]}, ${rgbMatch2[3]}, 0.7)`);
+            barGradient.addColorStop(1, `rgba(${rgbMatch2[1]}, ${rgbMatch2[2]}, ${rgbMatch2[3]}, 0.2)`);
+          } else {
+            barGradient.addColorStop(0, band.color);
+            barGradient.addColorStop(1, 'rgba(6, 182, 212, 0.2)');
+          }
+          
+          // Draw bars dengan smooth variation
+          for (let i = 0; i < barCount; i++) {
+            // Smooth variation menggunakan sine wave untuk lebih natural
+            const variation = Math.sin((currentTime * 0.002) + (i * 0.3)) * 0.15 + 0.85;
+            const barH = grHeight * Math.max(0.3, Math.min(1.0, variation));
+            
+            ctx.fillStyle = barGradient;
+            ctx.fillRect(
+              x1 + 2 + i * (barWidth + barSpacing),
+              height - barH,
+              barWidth,
+              barH
+            );
+          }
+        }
+
+        // Draw crossover divider (except for first band) - optimized
         if (index > 0) {
           const isCrossoverHovered = hoveredElement.type === 'crossover' && hoveredElement.index === index - 1;
           const isCrossoverDragging = dragStateRef.current.isDragging && dragStateRef.current.type === 'crossover' && dragStateRef.current.bandIndex === index - 1;
           
+          ctx.save();
           ctx.strokeStyle = isCrossoverHovered || isCrossoverDragging ? 'rgba(6, 182, 212, 1)' : 'rgba(200, 200, 210, 0.8)';
           ctx.lineWidth = isCrossoverHovered || isCrossoverDragging ? 3 : 2;
-          ctx.shadowColor = isCrossoverHovered || isCrossoverDragging ? 'rgba(6, 182, 212, 0.8)' : 'transparent';
-          ctx.shadowBlur = isCrossoverHovered || isCrossoverDragging ? 15 : 0;
+          ctx.lineCap = 'round';
+          
+          if (isCrossoverHovered || isCrossoverDragging) {
+            ctx.shadowColor = 'rgba(6, 182, 212, 0.8)';
+            ctx.shadowBlur = 15;
+          }
           
           ctx.beginPath();
           ctx.moveTo(x1, 0);
           ctx.lineTo(x1, height);
           ctx.stroke();
-          
-          ctx.shadowColor = 'transparent';
-          ctx.shadowBlur = 0;
+          ctx.restore();
 
           // Draw handle on crossover when hovered/dragging
           if (isCrossoverHovered || isCrossoverDragging) {
@@ -547,10 +638,12 @@ export function MultibandCompressor({ enabled, onToggle, bands, onBandsChange }:
       const endLabelWidth = ctx.measureText(endLabel).width;
       ctx.fillText(endLabel, width - endLabelWidth - 5, height - 20);
 
+      ctx.restore(); // Restore context state
+
       animationRef.current = requestAnimationFrame(animate);
     };
 
-    animate();
+    animationRef.current = requestAnimationFrame(animate);
 
     return () => {
       if (animationRef.current) {
