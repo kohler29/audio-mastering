@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './useAuth';
+import { fetchWithCSRF } from '@/lib/apiClient';
 
 export interface PresetSettings {
   inputGain: number;
@@ -110,7 +111,7 @@ export function usePresets(): UsePresetsReturn {
     setError(null);
 
     try {
-      const res = await fetch('/api/presets', {
+      const res = await fetchWithCSRF('/api/presets', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -156,7 +157,7 @@ export function usePresets(): UsePresetsReturn {
     setError(null);
 
     try {
-      const res = await fetch(`/api/presets/${id}`, {
+      const res = await fetchWithCSRF(`/api/presets/${id}`, {
         method: 'DELETE',
       });
 
@@ -178,7 +179,7 @@ export function usePresets(): UsePresetsReturn {
     setError(null);
 
     try {
-      const res = await fetch(`/api/presets/${id}`, {
+      const res = await fetchWithCSRF(`/api/presets/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

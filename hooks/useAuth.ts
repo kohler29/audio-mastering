@@ -1,5 +1,6 @@
 import useSWR from 'swr';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { fetchWithCSRF, clearCSRFTokenCache } from '@/lib/apiClient';
 
 interface User {
   id: string;
@@ -45,7 +46,7 @@ export function useAuth() {
   const login = async (email: string, password: string): Promise<void> => {
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetchWithCSRF('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,7 +73,7 @@ export function useAuth() {
   ): Promise<void> => {
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetchWithCSRF('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -94,9 +95,10 @@ export function useAuth() {
 
   const logout = async (): Promise<void> => {
     try {
-      await fetch('/api/auth/logout', {
+      await fetchWithCSRF('/api/auth/logout', {
         method: 'POST',
       });
+      clearCSRFTokenCache();
       await mutate(undefined, false);
     } catch (error) {
       console.error('Logout error:', error);

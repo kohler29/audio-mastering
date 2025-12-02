@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { sanitizePresetName, sanitizeFolderName } from '@/lib/validation';
+import { verifyCSRFToken } from '@/lib/csrf';
 
 /**
  * GET /api/presets
@@ -64,6 +66,15 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Verify CSRF token signature (Node.js runtime)
+    const csrfToken = request.headers.get('x-csrf-token');
+    if (csrfToken && !verifyCSRFToken(csrfToken)) {
+      return NextResponse.json(
+        { error: 'CSRF token tidak valid' },
+        { status: 403 }
+      );
+    }
+
     const token = request.cookies.get('token')?.value;
 
     if (!token) {
@@ -94,9 +105,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Validasi settings adalah object
-    if (typeof settings !== 'object' || settings === null) {
+    if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
       return NextResponse.json(
         { error: 'Settings harus berupa object' },
+        { status: 400 }
+      );
+    }
+
+    // Sanitize input
+    const sanitizedName = sanitizePresetName(name);
+    const sanitizedFolder = sanitizeFolderName(folder);
+
+    if (!sanitizedName || sanitizedName.length === 0) {
+      return NextResponse.json(
+        { error: 'Nama preset tidak valid' },
         { status: 400 }
       );
     }
@@ -105,14 +127,14 @@ export async function POST(request: NextRequest) {
     const existingPreset = await prisma.preset.findFirst({
       where: {
         userId: payload.userId,
-        name: name.trim(),
-        folder: folder?.trim() || null,
+        name: sanitizedName,
+        folder: sanitizedFolder,
       },
     });
 
     if (existingPreset) {
       return NextResponse.json(
-        { error: `Preset dengan nama "${name}" sudah ada${folder ? ` di folder "${folder}"` : ''}` },
+        { error: `Preset dengan nama "${sanitizedName}" sudah ada${sanitizedFolder ? ` di folder "${sanitizedFolder}"` : ''}` },
         { status: 400 }
       );
     }
@@ -120,11 +142,11 @@ export async function POST(request: NextRequest) {
     // Buat preset baru
     const preset = await prisma.preset.create({
       data: {
-        name: name.trim(),
+        name: sanitizedName,
         userId: payload.userId,
         settings: settings,
         isPublic: isPublic === true,
-        folder: folder?.trim() || null,
+        folder: sanitizedFolder,
       },
       include: {
         user: {

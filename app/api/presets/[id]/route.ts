@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { sanitizePresetName, sanitizeFolderName } from '@/lib/validation';
+import { verifyCSRFToken } from '@/lib/csrf';
 
 /**
  * GET /api/presets/[id]
@@ -76,6 +78,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Verify CSRF token signature (Node.js runtime)
+    const csrfToken = request.headers.get('x-csrf-token');
+    if (csrfToken && !verifyCSRFToken(csrfToken)) {
+      return NextResponse.json(
+        { error: 'CSRF token tidak valid' },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
     const token = request.cookies.get('token')?.value;
 
@@ -117,13 +128,27 @@ export async function PATCH(
     const body = await request.json();
     const { name, settings, isPublic, folder } = body;
 
+    // Sanitize input
+    const sanitizedName = name ? sanitizePresetName(name) : null;
+    const sanitizedFolder = folder !== undefined ? sanitizeFolderName(folder) : undefined;
+
+    // Validasi settings jika diberikan
+    if (settings !== undefined) {
+      if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
+        return NextResponse.json(
+          { error: 'Settings harus berupa object' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Cek apakah nama sudah digunakan oleh preset lain milik user ini di folder yang sama
-    if (name && name.trim() !== preset.name) {
-      const targetFolder = folder !== undefined ? (folder?.trim() || null) : preset.folder;
+    if (sanitizedName && sanitizedName !== preset.name) {
+      const targetFolder = sanitizedFolder !== undefined ? sanitizedFolder : preset.folder;
       const existingPreset = await prisma.preset.findFirst({
         where: {
           userId: payload.userId,
-          name: name.trim(),
+          name: sanitizedName,
           folder: targetFolder,
           id: { not: id },
         },
@@ -131,7 +156,7 @@ export async function PATCH(
 
       if (existingPreset) {
         return NextResponse.json(
-          { error: `Preset dengan nama "${name}" sudah ada${targetFolder ? ` di folder "${targetFolder}"` : ''}` },
+          { error: `Preset dengan nama "${sanitizedName}" sudah ada${targetFolder ? ` di folder "${targetFolder}"` : ''}` },
           { status: 400 }
         );
       }
@@ -141,10 +166,10 @@ export async function PATCH(
     const updated = await prisma.preset.update({
       where: { id },
       data: {
-        ...(name && { name: name.trim() }),
+        ...(sanitizedName && { name: sanitizedName }),
         ...(settings && { settings }),
         ...(typeof isPublic === 'boolean' && { isPublic }),
-        ...(folder !== undefined && { folder: folder?.trim() || null }),
+        ...(sanitizedFolder !== undefined && { folder: sanitizedFolder }),
       },
       include: {
         user: {
@@ -175,6 +200,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Verify CSRF token signature (Node.js runtime)
+    const csrfToken = request.headers.get('x-csrf-token');
+    if (csrfToken && !verifyCSRFToken(csrfToken)) {
+      return NextResponse.json(
+        { error: 'CSRF token tidak valid' },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
     const token = request.cookies.get('token')?.value;
 

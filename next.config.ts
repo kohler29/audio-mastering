@@ -13,6 +13,62 @@ const nextConfig: NextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
+  // Security headers
+  async headers() {
+    // Generate nonce for CSP (in production, use a proper nonce generator)
+    const cspNonce = process.env.CSP_NONCE || 'default-nonce';
+
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net", // unsafe-eval needed for ffmpeg
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: https: blob:",
+              "font-src 'self' data: https:",
+              "connect-src 'self' https://*.googleapis.com https://oauth2.googleapis.com https://www.googleapis.com https://*.sentry.io https://vitals.vercel-insights.com",
+              "media-src 'self' blob:",
+              "worker-src 'self' blob:",
+              "frame-src 'self' https://www.google.com",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+              "upgrade-insecure-requests",
+            ].join('; '),
+          },
+        ],
+      },
+    ];
+  },
   webpack: (config, { isServer }) => {
     // Handle @ffmpeg/ffmpeg - should only be loaded on client side
     if (!isServer) {

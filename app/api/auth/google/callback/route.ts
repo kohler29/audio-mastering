@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateToken } from '@/lib/auth';
+import { generateSafeUsername, isValidEmail, sanitizeString } from '@/lib/validation';
 
 /**
  * Handle Google OAuth callback
@@ -74,20 +75,23 @@ export async function GET(request: NextRequest) {
     const userInfo = await userInfoResponse.json();
     const { id: googleId, email, name } = userInfo;
 
-    if (!email) {
+    if (!email || !isValidEmail(email)) {
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}?error=${encodeURIComponent('Email tidak ditemukan dari Google')}`
       );
     }
 
-    // Generate username from email or name
-    const username = name?.toLowerCase().replace(/\s+/g, '_') || email.split('@')[0];
+    // Sanitize email
+    const sanitizedEmail = sanitizeString(email.toLowerCase(), 254);
+
+    // Generate safe username from email or name
+    const username = generateSafeUsername(name || email);
 
     // Cari user berdasarkan googleId atau email
     let user = await prisma.user.findFirst({
       where: {
         OR: [
-          { email },
+          { email: sanitizedEmail },
         ],
       },
     });
@@ -126,7 +130,7 @@ export async function GET(request: NextRequest) {
 
       user = await prisma.user.create({
         data: {
-          email,
+          email: sanitizedEmail,
           username: finalUsername,
           googleId: googleId,
           provider: 'google',
@@ -149,7 +153,8 @@ export async function GET(request: NextRequest) {
     response.cookies.set('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
+      path: '/',
       maxAge: 60 * 60 * 24 * 7, // 7 hari
     });
 
