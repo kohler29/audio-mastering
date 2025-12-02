@@ -66,10 +66,11 @@ export function AudioMasteringPlugin() {
   const DISCLAIMER_ACCEPT_LABEL = process.env.NEXT_PUBLIC_DISCLAIMER_ACCEPT_LABEL || 'Saya Mengerti';
   const DISCLAIMER_CLOSE_LABEL = process.env.NEXT_PUBLIC_DISCLAIMER_CLOSE_LABEL || 'Tutup';
   const [showDisclaimer, setShowDisclaimer] = useState(false);
-  const DEFAULT_FADE_MS = Number(process.env.NEXT_PUBLIC_FADE_DURATION_MS || 3000);
+  // Default fade dibuat 0 ms agar user bisa menentukan sendiri
+  const DEFAULT_FADE_MS = Number(process.env.NEXT_PUBLIC_FADE_DURATION_MS ?? 0) || 0;
   const [fadeDurationMs, setFadeDurationMs] = useState<number>(DEFAULT_FADE_MS);
-  const [exportFadeInMs, setExportFadeInMs] = useState<number>(DEFAULT_FADE_MS);
-  const [exportFadeOutMs, setExportFadeOutMs] = useState<number>(DEFAULT_FADE_MS);
+  const [exportFadeInMs, setExportFadeInMs] = useState<number>(0);
+  const [exportFadeOutMs, setExportFadeOutMs] = useState<number>(0);
   const {
     isInitialized,
     isLoading,
@@ -963,7 +964,16 @@ export function AudioMasteringPlugin() {
             )}
           </div>
           <button 
-            onClick={() => setShowSavePresetModal(true)}
+            onClick={() => {
+              // Pre-fill preset name with current preset name if it's a built-in preset
+              if (selectedPreset && !selectedPresetId) {
+                const currentPresetName = presetNames.find(p => p.toLowerCase() === selectedPreset);
+                if (currentPresetName) {
+                  setPresetName(currentPresetName);
+                }
+              }
+              setShowSavePresetModal(true);
+            }}
             aria-label="Save preset"
             className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-2 rounded-lg border border-zinc-600 transition-colors"
             title="Save Preset"
@@ -1788,20 +1798,49 @@ export function AudioMasteringPlugin() {
                 <Folder className="w-4 h-4" />
                 Folder (opsional)
               </label>
-              <input
-                type="text"
-                value={presetFolder}
-                onChange={(e) => setPresetFolder(e.target.value)}
-                placeholder="Nama folder"
-                className="w-full bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSavePreset();
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={presetFolder}
+                  onChange={(e) => setPresetFolder(e.target.value)}
+                  placeholder="Nama folder (misal: Default, Mastering, dll)"
+                  className="flex-1 bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSavePreset();
+                    }
+                  }}
+                />
+                {(() => {
+                  // Get existing folders from user's presets
+                  const myPresets = dbPresets.filter(p => p.userId === user?.id);
+                  const existingFolders = Array.from(new Set(myPresets.map(p => p.folder).filter((f): f is string => f !== null)));
+                  existingFolders.sort();
+                  
+                  if (existingFolders.length > 0) {
+                    return (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setPresetFolder(e.target.value);
+                          }
+                        }}
+                        className="bg-zinc-700 text-zinc-100 px-3 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 text-sm"
+                        title="Pilih folder yang sudah ada"
+                      >
+                        <option value="">Pilih folder...</option>
+                        {existingFolders.map(folder => (
+                          <option key={folder} value={folder}>{folder}</option>
+                        ))}
+                      </select>
+                    );
                   }
-                }}
-              />
+                  return null;
+                })()}
+              </div>
               <p className="text-zinc-500 text-xs mt-1">
-                Kosongkan jika tidak ingin menggunakan folder
+                Ketik nama folder baru atau pilih dari folder yang sudah ada. Kosongkan jika tidak ingin menggunakan folder.
               </p>
             </div>
             <div className="mb-4">
@@ -2056,7 +2095,7 @@ export function AudioMasteringPlugin() {
                   <span className="text-lg">✨</span> Master Bypass Feature
                 </h3>
                 <p className="text-zinc-300 text-sm leading-relaxed">
-                  Compare your audio before and after mastering in real-time! Click the <span className="font-semibold text-cyan-400">ON/Bypass button</span> above the waveform to switch between original (Bypass) and mastered (ON) audio instantly.
+                  Compare your audio before and after mastering in real-time! Click the <span className="font-semibold text-cyan-400">ON/OFF button</span> above the waveform to switch between original (Bypass) and mastered (ON) audio instantly.
                 </p>
               </div>
 
