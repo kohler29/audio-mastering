@@ -1770,7 +1770,7 @@ export class AudioEngine {
   async exportAudio(
     settings: AudioEngineSettings,
     format: 'wav' | 'mp3' | 'flac' = 'wav',
-    quality?: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless'
+    quality?: '16bit' | '24bit' | 'wav_24_48' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless'
   ): Promise<Blob> {
     console.log('[Export] Format:', format, 'Quality:', quality);
     if (!this.audioBuffer) {
@@ -1782,6 +1782,8 @@ export class AudioEngine {
       // Tentukan sample rate target untuk WAV hi-res tanpa FFmpeg jika memungkinkan
       let sampleRate = sourceSampleRate;
       if (format === 'wav' && quality) {
+        if (quality === '24bit') sampleRate = 48000;
+        if (quality === 'wav_24_48') sampleRate = 48000;
         if (quality === 'wav_24_96') sampleRate = 96000;
         if (quality === 'wav_24_192') sampleRate = 192000;
       }
@@ -2038,41 +2040,11 @@ export class AudioEngine {
           if (!wav || (wav instanceof ArrayBuffer && wav.byteLength === 0)) {
             throw new Error('WAV conversion produced empty buffer');
           }
-          // Jika format target WAV, handle opsi hi-res 24-bit via FFmpeg lalu return
+          // Jika format target WAV, handle opsi hi-res 24-bit tanpa FFmpeg (menulis PCM 24-bit manual)
           if (format === 'wav') {
-            if (quality === 'wav_24_96' || quality === 'wav_24_192') {
-              try {
-                const { createFFmpegFn, fetchFileFn } = await this.getFFmpegLoader();
-                const corePath = (process.env.NEXT_PUBLIC_FFMPEG_CORE_URL || '').trim() || '/ffmpeg/ffmpeg-core.js';
-                const ffmpeg = createFFmpegFn({ log: false, corePath });
-                await ffmpeg.load();
-
-                const inputName = 'input.wav';
-                const inputData = await fetchFileFn(new Blob([wav], { type: 'audio/wav' }));
-                ffmpeg.FS('writeFile', inputName, inputData as Uint8Array);
-
-                const targetSampleRate = quality === 'wav_24_192' ? '192000' : '96000';
-                const outputName = `output_${quality}_24bit.wav`;
-                await ffmpeg.run(
-                  '-i', inputName,
-                  '-af', `aresample=${targetSampleRate}`,
-                  '-ar', targetSampleRate,
-                  '-ac', '2',
-                  '-acodec', 'pcm_s24le',
-                  '-sample_fmt', 's24',
-                  '-f', 'wav',
-                  '-y', outputName
-                );
-                const data = ffmpeg.FS('readFile', outputName) as Uint8Array;
-                const ab = new ArrayBuffer(data.byteLength);
-                const view = new Uint8Array(ab);
-                view.set(data);
-                return new Blob([ab], { type: 'audio/wav' });
-              } catch (ffmpegErr: unknown) {
-                console.error('[Export] FFmpeg WAV 24-bit conversion failed:', ffmpegErr);
-                // Fallback ke WAV standar jika FFmpeg gagal
-                return new Blob([wav], { type: 'audio/wav' });
-              }
+            if (quality === '24bit' || quality === 'wav_24_48' || quality === 'wav_24_96' || quality === 'wav_24_192') {
+              const pcm24 = this.encodeWavPCM24(renderedBuffer);
+              return new Blob([pcm24], { type: 'audio/wav' });
             }
             // Return WAV standar jika tidak meminta hi-res
             return new Blob([wav], { type: 'audio/wav' });
@@ -2509,6 +2481,74 @@ export class AudioEngine {
       s.onerror = () => reject(new Error(`Failed to load script: ${src}`));
       document.head.appendChild(s);
     });
+  }
+
+  /**
+   * Mengkodekan AudioBuffer menjadi WAV PCM 24-bit (little-endian) tanpa FFmpeg.
+   * Menghasilkan header RIFF/WAVE standar dengan bitsPerSample=24.
+   */
+  private encodeWavPCM24(buffer: AudioBuffer): ArrayBuffer {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const length = buffer.length;
+    const bytesPerSample = 3; // 24-bit = 3 bytes
+    const blockAlign = numChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = length * blockAlign;
+    const headerSize = 44; // RIFF (12) + fmt (24) + data (8)
+    const totalSize = headerSize + dataSize;
+
+    const ab = new ArrayBuffer(totalSize);
+    const view = new DataView(ab);
+
+    // RIFF header
+    this.writeString(view, 0, 'RIFF');
+    view.setUint32(4, totalSize - 8, true);
+    this.writeString(view, 8, 'WAVE');
+
+    // fmt chunk
+    this.writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true); // PCM fmt chunk size
+    view.setUint16(20, 1, true); // Audio format: PCM
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 24, true); // bits per sample
+
+    // data chunk
+    this.writeString(view, 36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    // Interleave channels and quantize to 24-bit
+    const channels: Float32Array[] = [];
+    for (let ch = 0; ch < numChannels; ch++) {
+      channels.push(buffer.getChannelData(ch));
+    }
+
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      for (let ch = 0; ch < numChannels; ch++) {
+        const sample = channels[ch][i];
+        const clamped = Math.max(-1, Math.min(1, sample));
+        const intSample = Math.round(clamped * 8388607); // max for 24-bit signed
+        view.setUint8(offset, intSample & 0xFF);
+        view.setUint8(offset + 1, (intSample >> 8) & 0xFF);
+        view.setUint8(offset + 2, (intSample >> 16) & 0xFF);
+        offset += 3;
+      }
+    }
+
+    return ab;
+  }
+
+  /**
+   * Menulis string ASCII ke DataView pada offset tertentu.
+   */
+  private writeString(view: DataView, offset: number, str: string): void {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
   }
 
   /**
