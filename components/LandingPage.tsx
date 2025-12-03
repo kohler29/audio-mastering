@@ -1,4 +1,4 @@
-import { Zap, Sliders, Radio, Waves, Gauge, AudioWaveform, Play, ArrowRight } from 'lucide-react';
+import { Zap, Sliders, Radio, Waves, Gauge, AudioWaveform, Play, ArrowRight, Code, Music, Headphones, Globe, Instagram, Volume2, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface LandingPageProps {
@@ -790,6 +790,257 @@ export function LandingPage({ onGetStarted, onViewFeatures, onViewAbout, onViewS
               <span className="text-sm">Industry Standard</span>
             </motion.div>
           </motion.div>
+        </div>
+      </div>
+
+      {/* Team Section */}
+      <div className="relative z-10 px-6 py-20 bg-zinc-900/30">
+        <div className="max-w-7xl mx-auto">
+          <motion.div 
+            className="text-center mb-16"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+          >
+            <motion.h2 
+              className="text-4xl text-white mb-4"
+              initial={{ y: 20, opacity: 0 }}
+              whileInView={{ y: 0, opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              Meet the Team
+            </motion.h2>
+            <motion.p 
+              className="text-zinc-400 text-lg"
+              initial={{ y: 20, opacity: 0 }}
+              whileInView={{ y: 0, opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              The minds behind MasterPro
+            </motion.p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {/* Team Member 1 - Boedi */}
+            <motion.div
+              className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 hover:border-cyan-500/50 rounded-2xl p-8 transition-all"
+              initial={{ y: 50, opacity: 0 }}
+              whileInView={{ y: 0, opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              whileHover={{ y: -10 }}
+            >
+              <motion.div
+                className="relative w-32 h-32 mx-auto mb-6"
+                whileHover={{ scale: 1.1 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <div className="absolute inset-0 bg-linear-to-br from-cyan-500 to-purple-600 rounded-full" />
+                <motion.div 
+                  className="absolute inset-1 bg-zinc-900 rounded-full flex items-center justify-center"
+                  animate={{
+                    boxShadow: [
+                      "0 0 15px rgba(6, 182, 212, 0.3)",
+                      "0 0 25px rgba(6, 182, 212, 0.5)",
+                      "0 0 15px rgba(6, 182, 212, 0.3)",
+                    ]
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <div className="text-3xl text-white">BMF</div>
+                </motion.div>
+              </motion.div>
+
+              <h3 className="text-2xl text-white text-center mb-2">Boedi Moelya MF</h3>
+              
+              <div className="space-y-2 mb-6">
+                <div className="flex items-center justify-center gap-2 text-cyan-400 text-sm">
+                  <Code className="w-4 h-4" />
+                  <span>Software Engineer</span>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-purple-400 text-sm">
+                  <Headphones className="w-4 h-4" />
+                  <span>Audio Engineer</span>
+                </div>
+              </div>
+
+              <p className="text-zinc-400 text-sm text-center leading-relaxed mb-6">
+                Lead developer and audio specialist, bringing studio-grade processing to the web with modern technologies.
+              </p>
+
+              <div className="flex justify-center gap-2">
+                <motion.a
+                  href="https://bmmf.site/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-cyan-500/50 rounded-lg transition-all"
+                  whileHover={{ scale: 1.1, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Globe className="w-4 h-4 text-zinc-300" />
+                </motion.a>
+                <motion.a
+                  href="https://www.instagram.com/moehammadfiqih/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-cyan-500/50 rounded-lg transition-all"
+                  whileHover={{ scale: 1.1, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Instagram className="w-4 h-4 text-zinc-300" />
+                </motion.a>
+              </div>
+            </motion.div>
+
+            {/* Team Member 2 - Agus */}
+            <motion.div
+              className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 hover:border-purple-500/50 rounded-2xl p-8 transition-all"
+              initial={{ y: 50, opacity: 0 }}
+              whileInView={{ y: 0, opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              whileHover={{ y: -10 }}
+            >
+              <motion.div
+                className="relative w-32 h-32 mx-auto mb-6"
+                whileHover={{ scale: 1.1 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <div className="absolute inset-0 bg-linear-to-br from-purple-500 to-pink-600 rounded-full" />
+                <motion.div 
+                  className="absolute inset-1 bg-zinc-900 rounded-full flex items-center justify-center"
+                  animate={{
+                    boxShadow: [
+                      "0 0 15px rgba(168, 85, 247, 0.3)",
+                      "0 0 25px rgba(168, 85, 247, 0.5)",
+                      "0 0 15px rgba(168, 85, 247, 0.3)",
+                    ]
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <div className="text-3xl text-white">AH</div>
+                </motion.div>
+              </motion.div>
+
+              <h3 className="text-2xl text-white text-center mb-2">Agus Hardiman</h3>
+              
+              <div className="space-y-2 mb-6">
+                <div className="flex items-center justify-center gap-2 text-purple-400 text-sm">
+                  <Music className="w-4 h-4" />
+                  <span>Producer</span>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-cyan-400 text-sm">
+                  <Code className="w-4 h-4" />
+                  <span>Software Engineer</span>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-pink-400 text-sm">
+                  <Headphones className="w-4 h-4" />
+                  <span>Audio Engineer</span>
+                </div>
+              </div>
+
+              <p className="text-zinc-400 text-sm text-center leading-relaxed mb-6">
+                Multi-talented producer and engineer, ensuring MasterPro meets real-world production needs while creating content to help users.
+              </p>
+
+              <div className="flex justify-center gap-2">
+                <motion.a
+                  href="https://agushardiman.tv/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-purple-500/50 rounded-lg transition-all"
+                  whileHover={{ scale: 1.1, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Globe className="w-4 h-4 text-zinc-300" />
+                </motion.a>
+                <motion.a
+                  href="https://www.instagram.com/agushardiman/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-purple-500/50 rounded-lg transition-all"
+                  whileHover={{ scale: 1.1, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Instagram className="w-4 h-4 text-zinc-300" />
+                </motion.a>
+              </div>
+            </motion.div>
+
+            {/* Team Member 3 - Deby */}
+            <motion.div
+              className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 hover:border-emerald-500/50 rounded-2xl p-8 transition-all"
+              initial={{ y: 50, opacity: 0 }}
+              whileInView={{ y: 0, opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              whileHover={{ y: -10 }}
+            >
+              <motion.div
+                className="relative w-32 h-32 mx-auto mb-6"
+                whileHover={{ scale: 1.1 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <div className="absolute inset-0 bg-linear-to-br from-emerald-500 to-cyan-600 rounded-full" />
+                <motion.div 
+                  className="absolute inset-1 bg-zinc-900 rounded-full flex items-center justify-center"
+                  animate={{
+                    boxShadow: [
+                      "0 0 15px rgba(16, 185, 129, 0.3)",
+                      "0 0 25px rgba(16, 185, 129, 0.5)",
+                      "0 0 15px rgba(16, 185, 129, 0.3)",
+                    ]
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <div className="text-3xl text-white">DP</div>
+                </motion.div>
+              </motion.div>
+
+              <h3 className="text-2xl text-white text-center mb-2">Deby Pamungkas</h3>
+              
+              <div className="space-y-2 mb-6">
+                <div className="flex items-center justify-center gap-2 text-emerald-400 text-sm">
+                  <Volume2 className="w-4 h-4" />
+                  <span>Live Sound Engineer</span>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-cyan-400 text-sm">
+                  <Activity className="w-4 h-4" />
+                  <span>Audio Software Engineer Enthusiast</span>
+                </div>
+              </div>
+
+              <p className="text-zinc-400 text-sm text-center leading-relaxed mb-6">
+                Live sound specialist bringing real-time processing expertise and performance optimization to ensure MasterPro runs flawlessly.
+              </p>
+
+              <div className="flex justify-center gap-2">
+                <motion.a
+                  href="https://www.debypamungkas.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-emerald-500/50 rounded-lg transition-all"
+                  whileHover={{ scale: 1.1, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Globe className="w-4 h-4 text-zinc-300" />
+                </motion.a>
+                <motion.a
+                  href="https://www.instagram.com/debypamungkas/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-emerald-500/50 rounded-lg transition-all"
+                  whileHover={{ scale: 1.1, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Instagram className="w-4 h-4 text-zinc-300" />
+                </motion.a>
+              </div>
+            </motion.div>
+          </div>
         </div>
       </div>
 
