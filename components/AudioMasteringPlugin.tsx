@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as Sentry from '@sentry/nextjs';
-import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X, Edit, Trash2, Folder, ChevronUp, ChevronDown } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X, Edit, Trash2, Folder, ChevronUp, ChevronDown, Users } from 'lucide-react';
 import { Waveform } from './audio/Waveform';
 import { SpectrumAnalyzer } from './audio/SpectrumAnalyzer';
 import { Knob } from './audio/Knob';
@@ -104,6 +104,7 @@ export function AudioMasteringPlugin() {
   const [showSavePresetModal, setShowSavePresetModal] = useState(false);
   const [showEditPresetModal, setShowEditPresetModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
   const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null);
   const [deletingPresetName, setDeletingPresetName] = useState<string>('');
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
@@ -993,6 +994,15 @@ export function AudioMasteringPlugin() {
           <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 rounded-lg border border-zinc-700 max-w-full">
             <span className="text-zinc-400 text-xs">{user?.username}</span>
           </div>
+          <button 
+            onClick={() => setShowAboutModal(true)}
+            aria-label="About"
+            className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 transition-colors flex items-center gap-2"
+            title="About"
+          >
+            <Users className="w-4 h-4" />
+            <span className="text-sm">About</span>
+          </button>
           <button 
             onClick={logout}
             aria-label="Logout"
@@ -2161,6 +2171,168 @@ export function AudioMasteringPlugin() {
                 className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg transition-colors font-medium"
               >
                 Mengerti!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* About Modal */}
+      {showAboutModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 rounded-xl w-full max-w-6xl max-h-[90vh] border border-zinc-700 shadow-2xl flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-zinc-800">
+              <h2 className="text-2xl text-white">About MasterPro</h2>
+              <button 
+                onClick={() => setShowAboutModal(false)}
+                className="text-zinc-400 hover:text-zinc-100 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Modal Content - Scrollable */}
+            <div className="overflow-y-auto flex-1 p-6">
+              {/* Hero Section */}
+              <div className="text-center mb-12">
+                <h1 className="text-4xl text-white mb-4">About MasterPro</h1>
+                <p className="text-zinc-400 text-lg max-w-3xl mx-auto">
+                  A professional audio mastering plugin built by a team of passionate audio and software engineers 
+                  from Indonesia, combining years of studio experience with cutting-edge web technology.
+                </p>
+              </div>
+
+              {/* Team Section */}
+              <div className="mb-12">
+                <h2 className="text-3xl text-white mb-8 text-center">Meet the Team</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Team Member 1 - Boedi */}
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
+                    <div className="w-24 h-24 bg-linear-to-br from-cyan-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <div className="text-2xl text-white">BMF</div>
+                    </div>
+                    <h3 className="text-xl text-white text-center mb-2">Boedi Moelya MF</h3>
+                    <div className="space-y-1 mb-4">
+                      <div className="flex items-center justify-center gap-2 text-cyan-400 text-sm">
+                        <span>Software Engineer</span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 text-purple-400 text-sm">
+                        <span>Audio Engineer</span>
+                      </div>
+                    </div>
+                    <p className="text-zinc-400 text-sm text-center mb-4">
+                      Lead developer and audio specialist, bringing studio-grade processing to the web.
+                    </p>
+                    <div className="flex justify-center gap-2">
+                      <a href="https://bmmf.site/" target="_blank" rel="noopener noreferrer" className="p-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors">
+                        <span className="text-zinc-300 text-xs">Website</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Team Member 2 - Agus */}
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
+                    <div className="w-24 h-24 bg-linear-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <div className="text-2xl text-white">AH</div>
+                    </div>
+                    <h3 className="text-xl text-white text-center mb-2">Agus Hardiman</h3>
+                    <div className="space-y-1 mb-4">
+                      <div className="flex items-center justify-center gap-2 text-purple-400 text-sm">
+                        <span>Producer</span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 text-cyan-400 text-sm">
+                        <span>Software Engineer</span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 text-pink-400 text-sm">
+                        <span>Audio Engineer</span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 text-yellow-400 text-sm">
+                        <span>Audio Educator</span>
+                      </div>
+                    </div>
+                    <p className="text-zinc-400 text-sm text-center mb-4">
+                      Multi-talented producer and engineer, ensuring MasterPro meets real-world production needs.
+                    </p>
+                    <div className="flex justify-center gap-2">
+                      <a href="https://agushardiman.tv/" target="_blank" rel="noopener noreferrer" className="p-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors">
+                        <span className="text-zinc-300 text-xs">Website</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Team Member 3 - Deby */}
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
+                    <div className="w-24 h-24 bg-linear-to-br from-emerald-500 to-cyan-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <div className="text-2xl text-white">DP</div>
+                    </div>
+                    <h3 className="text-xl text-white text-center mb-2">Deby Pamungkas</h3>
+                    <div className="space-y-1 mb-4">
+                      <div className="flex items-center justify-center gap-2 text-emerald-400 text-sm">
+                        <span>Live Sound Engineer</span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 text-cyan-400 text-sm">
+                        <span>Audio Software Engineer</span>
+                      </div>
+                    </div>
+                    <p className="text-zinc-400 text-sm text-center mb-4">
+                      Live sound specialist bringing real-time processing expertise and performance optimization.
+                    </p>
+                    <div className="flex justify-center gap-2">
+                      <a href="https://www.debypamungkas.com/" target="_blank" rel="noopener noreferrer" className="p-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors">
+                        <span className="text-zinc-300 text-xs">Website</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mission & Values */}
+              <div className="mb-12">
+                <h2 className="text-3xl text-white mb-8 text-center">Mission & Values</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6 text-center">
+                    <h3 className="text-white text-xl mb-2">Professional Quality</h3>
+                    <p className="text-zinc-400 text-sm">
+                      Delivering studio-grade tools with professional standards and precision
+                    </p>
+                  </div>
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6 text-center">
+                    <h3 className="text-white text-xl mb-2">User-Centric Design</h3>
+                    <p className="text-zinc-400 text-sm">
+                      Creating intuitive interfaces that make professional tools accessible to everyone
+                    </p>
+                  </div>
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6 text-center">
+                    <h3 className="text-white text-xl mb-2">Continuous Innovation</h3>
+                    <p className="text-zinc-400 text-sm">
+                      Always improving, learning, and pushing the boundaries of what&apos;s possible
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tech Stack */}
+              <div className="mb-12">
+                <h2 className="text-3xl text-white mb-8 text-center">Built With</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {['React', 'TypeScript', 'Tailwind CSS', 'Next.js', 'Web Audio API', 'Canvas API', 'Framer Motion', 'Lucide Icons'].map((tech) => (
+                    <div key={tech} className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 text-center">
+                      <div className="text-zinc-300 text-sm">{tech}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-zinc-800">
+              <button
+                onClick={() => setShowAboutModal(false)}
+                className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Tutup
               </button>
             </div>
           </div>

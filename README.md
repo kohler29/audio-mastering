@@ -55,6 +55,10 @@ Aplikasi web profesional untuk audio mastering dengan kontrol advanced dan visua
    # WAJIB di-set jika menggunakan Prisma Accelerate
    DIRECT_URL="postgresql://user:password@host:5432/database?schema=public"
    
+   # Application URL (untuk production: https://masteraudio.pro)
+   NEXT_PUBLIC_APP_URL="http://localhost:3000"
+   NEXT_PUBLIC_SITE_URL="http://localhost:3000"
+   
    # JWT Authentication
    JWT_SECRET="your-super-secret-jwt-key-min-32-chars"
    JWT_EXPIRES_IN="7d"
@@ -63,6 +67,13 @@ Aplikasi web profesional untuk audio mastering dengan kontrol advanced dan visua
    GOOGLE_CLIENT_ID="your-google-client-id"
    GOOGLE_CLIENT_SECRET="your-google-client-secret"
    GOOGLE_REDIRECT_URI="http://localhost:3000/api/auth/google/callback"
+   ```
+   
+   **Untuk Production:**
+   ```env
+   NEXT_PUBLIC_APP_URL="https://masteraudio.pro"
+   NEXT_PUBLIC_SITE_URL="https://masteraudio.pro"
+   GOOGLE_REDIRECT_URI="https://masteraudio.pro/api/auth/google/callback"
    ```
    
    **Catatan untuk Prisma Accelerate:**
@@ -224,6 +235,9 @@ Lihat panduan lengkap di **[DEPLOYMENT.md](./DEPLOYMENT.md)**
 - `DATABASE_URL` - PostgreSQL connection string
 - `JWT_SECRET` - JWT secret key (min 32 chars)
 - `JWT_EXPIRES_IN` - Token expiration (default: 7d)
+- `NEXT_PUBLIC_APP_URL` - Application URL (untuk OAuth redirects)
+- `NEXT_PUBLIC_SITE_URL` - Site URL (untuk SEO dan metadata)
+- `GOOGLE_REDIRECT_URI` - Google OAuth redirect URI (jika menggunakan OAuth)
 
 ---
 
