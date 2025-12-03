@@ -952,7 +952,7 @@ export function LandingPage({ onGetStarted, onViewFeatures, onViewAbout, onViewS
 
               <div className="flex justify-center gap-2">
                 <motion.a
-                  href="https://agushardiman.tv/"
+                  href="https://agushardiman.tv/about//"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-purple-500/50 rounded-lg transition-all"

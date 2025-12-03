@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import { 
   ArrowLeft,
   Code,
@@ -215,24 +216,17 @@ export function AboutPage({ onBack, onGetStarted }: AboutPageProps) {
               whileHover={{ y: -10 }}
             >
               <motion.div
-                className="relative w-32 h-32 mx-auto mb-6"
+                className="relative w-32 h-32 mx-auto mb-6 rounded-full overflow-hidden border-2 border-cyan-500/50"
                 whileHover={{ scale: 1.1 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <div className="absolute inset-0 bg-linear-to-br from-cyan-500 to-purple-600 rounded-full" />
-                <motion.div 
-                  className="absolute inset-1 bg-zinc-900 rounded-full flex items-center justify-center"
-                  animate={{
-                    boxShadow: [
-                      "0 0 15px rgba(6, 182, 212, 0.3)",
-                      "0 0 25px rgba(6, 182, 212, 0.5)",
-                      "0 0 15px rgba(6, 182, 212, 0.3)",
-                    ]
-                  }}
-                  transition={{ duration: 3, repeat: Infinity }}
-                >
-                  <div className="text-3xl text-white">BMF</div>
-                </motion.div>
+                <Image
+                  src="/boedi.jpeg"
+                  alt="Boedi Moelya MF"
+                  fill
+                  className="object-cover"
+                  sizes="128px"
+                />
               </motion.div>
 
               <h3 className="text-2xl text-white text-center mb-2">Boedi Moelya MF</h3>
@@ -285,24 +279,17 @@ export function AboutPage({ onBack, onGetStarted }: AboutPageProps) {
               whileHover={{ y: -10 }}
             >
               <motion.div
-                className="relative w-32 h-32 mx-auto mb-6"
+                className="relative w-32 h-32 mx-auto mb-6 rounded-full overflow-hidden border-2 border-purple-500/50"
                 whileHover={{ scale: 1.1 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <div className="absolute inset-0 bg-linear-to-br from-purple-500 to-pink-600 rounded-full" />
-                <motion.div 
-                  className="absolute inset-1 bg-zinc-900 rounded-full flex items-center justify-center"
-                  animate={{
-                    boxShadow: [
-                      "0 0 15px rgba(168, 85, 247, 0.3)",
-                      "0 0 25px rgba(168, 85, 247, 0.5)",
-                      "0 0 15px rgba(168, 85, 247, 0.3)",
-                    ]
-                  }}
-                  transition={{ duration: 3, repeat: Infinity }}
-                >
-                  <div className="text-3xl text-white">AH</div>
-                </motion.div>
+                <Image
+                  src="/agus.jpeg"
+                  alt="Agus Hardiman"
+                  fill
+                  className="object-cover"
+                  sizes="128px"
+                />
               </motion.div>
 
               <h3 className="text-2xl text-white text-center mb-2">Agus Hardiman</h3>
@@ -336,7 +323,7 @@ export function AboutPage({ onBack, onGetStarted }: AboutPageProps) {
 
               <div className="flex justify-center gap-2">
                 <motion.a
-                  href="https://agushardiman.tv/"
+                  href="https://agushardiman.tv/about//"
                   target="_blank"
                   className="p-2 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-purple-500/50 rounded-lg transition-all"
                   whileHover={{ scale: 1.1, y: -2 }}
@@ -367,24 +354,17 @@ export function AboutPage({ onBack, onGetStarted }: AboutPageProps) {
               whileHover={{ y: -10 }}
             >
               <motion.div
-                className="relative w-32 h-32 mx-auto mb-6"
+                className="relative w-32 h-32 mx-auto mb-6 rounded-full overflow-hidden border-2 border-emerald-500/50"
                 whileHover={{ scale: 1.1 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <div className="absolute inset-0 bg-linear-to-br from-emerald-500 to-cyan-600 rounded-full" />
-                <motion.div 
-                  className="absolute inset-1 bg-zinc-900 rounded-full flex items-center justify-center"
-                  animate={{
-                    boxShadow: [
-                      "0 0 15px rgba(16, 185, 129, 0.3)",
-                      "0 0 25px rgba(16, 185, 129, 0.5)",
-                      "0 0 15px rgba(16, 185, 129, 0.3)",
-                    ]
-                  }}
-                  transition={{ duration: 3, repeat: Infinity }}
-                >
-                  <div className="text-3xl text-white">DP</div>
-                </motion.div>
+                <Image
+                  src="/deby.jpeg"
+                  alt="Deby Pamungkas"
+                  fill
+                  className="object-cover"
+                  sizes="128px"
+                />
               </motion.div>
 
               <h3 className="text-2xl text-white text-center mb-2">Deby Pamungkas</h3>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import Image from 'next/image';
 import * as Sentry from '@sentry/nextjs';
 import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X, Edit, Trash2, Folder, ChevronUp, ChevronDown, Users } from 'lucide-react';
 import { Waveform } from './audio/Waveform';
@@ -2210,8 +2211,14 @@ export function AudioMasteringPlugin() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Team Member 1 - Boedi */}
                   <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
-                    <div className="w-24 h-24 bg-linear-to-br from-cyan-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <div className="text-2xl text-white">BMF</div>
+                    <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-4 relative border-2 border-cyan-500/50">
+                      <Image
+                        src="/boedi.jpeg"
+                        alt="Boedi Moelya MF"
+                        fill
+                        className="object-cover"
+                        sizes="96px"
+                      />
                     </div>
                     <h3 className="text-xl text-white text-center mb-2">Boedi Moelya MF</h3>
                     <div className="space-y-1 mb-4">
@@ -2234,8 +2241,14 @@ export function AudioMasteringPlugin() {
 
                   {/* Team Member 2 - Agus */}
                   <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
-                    <div className="w-24 h-24 bg-linear-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <div className="text-2xl text-white">AH</div>
+                    <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-4 relative border-2 border-purple-500/50">
+                      <Image
+                        src="/agus.jpeg"
+                        alt="Agus Hardiman"
+                        fill
+                        className="object-cover"
+                        sizes="96px"
+                      />
                     </div>
                     <h3 className="text-xl text-white text-center mb-2">Agus Hardiman</h3>
                     <div className="space-y-1 mb-4">
@@ -2256,7 +2269,7 @@ export function AudioMasteringPlugin() {
                       Multi-talented producer and engineer, ensuring MasterPro meets real-world production needs.
                     </p>
                     <div className="flex justify-center gap-2">
-                      <a href="https://agushardiman.tv/" target="_blank" rel="noopener noreferrer" className="p-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors">
+                      <a href="https://agushardiman.tv/about//" target="_blank" rel="noopener noreferrer" className="p-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors">
                         <span className="text-zinc-300 text-xs">Website</span>
                       </a>
                     </div>
@@ -2264,8 +2277,14 @@ export function AudioMasteringPlugin() {
 
                   {/* Team Member 3 - Deby */}
                   <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
-                    <div className="w-24 h-24 bg-linear-to-br from-emerald-500 to-cyan-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <div className="text-2xl text-white">DP</div>
+                    <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-4 relative border-2 border-emerald-500/50">
+                      <Image
+                        src="/deby.jpeg"
+                        alt="Deby Pamungkas"
+                        fill
+                        className="object-cover"
+                        sizes="96px"
+                      />
                     </div>
                     <h3 className="text-xl text-white text-center mb-2">Deby Pamungkas</h3>
                     <div className="space-y-1 mb-4">
