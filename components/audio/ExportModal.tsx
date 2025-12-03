@@ -5,7 +5,7 @@ import { X, Loader2 } from 'lucide-react';
 
 type ExportFormat = 'wav' | 'mp3' | 'flac';
 
-type ExportQuality = '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless';
+type ExportQuality = '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '128k' | '320k' | 'lossless';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -96,15 +96,25 @@ export function ExportModal({ isOpen, onClose, onExport }: ExportModalProps) {
               <label className="text-zinc-400 text-sm block mb-2">Quality</label>
               <div className="space-y-2">
                 {selectedFormat === 'mp3' ? (
-                  // MP3: Only 320 kbps
-                  <button 
-                    onClick={() => {
-                      handleExport(selectedFormat, '320k');
-                    }}
-                    className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
-                  >
-                    320 kbps (High Quality)
-                  </button>
+                  // MP3: 320 kbps dan 128 kbps
+                  <>
+                    <button 
+                      onClick={() => {
+                        handleExport(selectedFormat, '320k');
+                      }}
+                      className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
+                    >
+                      320 kbps (High Quality)
+                    </button>
+                    <button 
+                      onClick={() => {
+                        handleExport(selectedFormat, '128k');
+                      }}
+                      className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
+                    >
+                      128 kbps (Standard)
+                    </button>
+                  </>
                 ) : selectedFormat === 'flac' ? (
                   // FLAC: Only lossless
                   <button 

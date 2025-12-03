@@ -744,7 +744,7 @@ export function AudioMasteringPlugin() {
 
   const handleExportWithFormat = async (
     format: 'wav' | 'mp3' | 'flac',
-    quality: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless'
+    quality: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '128k' | '320k' | 'lossless'
   ) => {
     try {
       if (!audioFile) {
@@ -775,7 +775,7 @@ export function AudioMasteringPlugin() {
           qualitySuffix = '_44.1kHz_16bit';
         }
       } else if (format === 'mp3') {
-        qualitySuffix = '_320kbps';
+        qualitySuffix = quality === '128k' ? '_128kbps' : '_320kbps';
       } else if (format === 'flac') {
         qualitySuffix = '_lossless';
       }
@@ -792,7 +792,7 @@ export function AudioMasteringPlugin() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      const qualityLabel = format === 'mp3' ? '320 kbps' : format === 'flac' ? 'lossless' : quality === 'wav_24_192' ? '192kHz 24-bit' : quality === 'wav_24_96' ? '96kHz 24-bit' : quality;
+      const qualityLabel = format === 'mp3' ? (quality === '128k' ? '128 kbps' : '320 kbps') : format === 'flac' ? 'lossless' : quality === 'wav_24_192' ? '192kHz 24-bit' : quality === 'wav_24_96' ? '96kHz 24-bit' : quality;
       showToast(`Export successful! Audio exported as ${format.toUpperCase()}${qualityLabel ? ` (${qualityLabel})` : ''}.`, 'success');
     } catch (err) {
       console.error('Export failed:', err);

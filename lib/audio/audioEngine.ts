@@ -1770,7 +1770,7 @@ export class AudioEngine {
   async exportAudio(
     settings: AudioEngineSettings,
     format: 'wav' | 'mp3' | 'flac' = 'wav',
-    quality?: '16bit' | '24bit' | 'wav_24_48' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless'
+    quality?: '16bit' | '24bit' | 'wav_24_48' | 'wav_24_96' | 'wav_24_192' | '128k' | '320k' | 'lossless'
   ): Promise<Blob> {
     console.log('[Export] Format:', format, 'Quality:', quality);
     if (!this.audioBuffer) {
@@ -2065,9 +2065,10 @@ export class AudioEngine {
             // WAV hi-res ditangani di atas sebelum return
 
             if (format === 'mp3') {
-              // MP3 320kbps CBR
-              const outputName = 'output_320k.mp3';
-              await ffmpeg.run('-i', inputName, '-b:a', '320k', '-codec:a', 'libmp3lame', outputName);
+              // MP3 CBR (128 kbps atau 320 kbps)
+              const bitrate = quality === '128k' ? '128k' : '320k';
+              const outputName = bitrate === '128k' ? 'output_128k.mp3' : 'output_320k.mp3';
+              await ffmpeg.run('-i', inputName, '-b:a', bitrate, '-codec:a', 'libmp3lame', outputName);
               const data = ffmpeg.FS('readFile', outputName) as Uint8Array;
               const ab = new ArrayBuffer(data.byteLength);
               const view = new Uint8Array(ab);

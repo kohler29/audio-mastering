@@ -23,7 +23,7 @@ export interface UseAudioEngineReturn {
   exportAudio: (
     settings: AudioEngineSettings,
     format?: 'wav' | 'mp3' | 'flac',
-    quality?: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless'
+    quality?: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '128k' | '320k' | 'lossless'
   ) => Promise<Blob>;
   resumeContext: () => Promise<void>;
   fadeIn: (durationMs: number) => void;
@@ -204,7 +204,7 @@ export function useAudioEngine(): UseAudioEngineReturn {
   const exportAudio = useCallback(async (
     settings: AudioEngineSettings,
     format: 'wav' | 'mp3' | 'flac' = 'wav',
-    quality?: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless'
+    quality?: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '128k' | '320k' | 'lossless'
   ): Promise<Blob> => {
     if (!engine) {
       throw new Error('Audio engine not initialized');
