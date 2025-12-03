@@ -123,6 +123,7 @@ export function AudioMasteringPlugin() {
   const [outputGain, setOutputGain] = useState(0);
   const [outputGainInput, setOutputGainInput] = useState<string>('0');
   const [targetLUFS, setTargetLUFS] = useState(-14);
+  const [targetLUFSInput, setTargetLUFSInput] = useState<string>('-14');
   
   // Multiband Compressor states
   const [multibandEnabled, setMultibandEnabled] = useState(true);
@@ -1152,10 +1153,41 @@ export function AudioMasteringPlugin() {
               <div>
                 <label className="text-zinc-400 text-xs block mb-1">Target LUFS</label>
                 <input
-                  type="number"
-                  step="0.1"
-                  value={targetLUFS}
-                  onChange={(e) => setTargetLUFS(Number(e.target.value))}
+                  type="text"
+                  inputMode="decimal"
+                  value={targetLUFSInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    // Allow empty, minus sign, and valid decimal numbers
+                    if (val === '' || val === '-' || /^-?\d*\.?\d*$/.test(val)) {
+                      setTargetLUFSInput(val);
+                      // Update actual value when input is valid and complete
+                      if (val !== '' && val !== '-' && val !== '.' && val !== '-.') {
+                        const numVal = Number(val);
+                        if (!isNaN(numVal)) {
+                          // Clamp to reasonable LUFS range (-60 to 0)
+                          const clampedVal = Math.max(-60, Math.min(0, numVal));
+                          setTargetLUFS(clampedVal);
+                          // Update input if value was clamped
+                          if (clampedVal !== numVal) {
+                            setTargetLUFSInput(clampedVal.toString());
+                          }
+                        }
+                      }
+                    }
+                  }}
+                  onFocus={(e) => {
+                    e.target.select();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  onBlur={() => {
+                    // Ensure input shows current value on blur
+                    setTargetLUFSInput(targetLUFS.toString());
+                  }}
                   className="w-full bg-zinc-700 text-zinc-100 px-3 py-2 rounded border border-zinc-600 focus:outline-none focus:border-cyan-500 text-xs"
                 />
               </div>
