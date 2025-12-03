@@ -816,7 +816,7 @@ export function AudioMasteringPlugin() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6 mb-6">
         <div className="order-1 md:order-0 flex items-center gap-3">
-          <div className="relative w-30 h-30 shrink-0">
+          <div className="relative w-40 h-40 shrink-0">
             <Image
               src="/logo.png"
               alt="MasterPro Logo"
@@ -834,7 +834,7 @@ export function AudioMasteringPlugin() {
             {!isInitialized && (
               <p className="text-yellow-400 text-xs mt-1">Initializing audio engine...</p>
             )}
-            {isInitialized && contextState === 'suspended' && (
+            {/* {isInitialized && contextState === 'suspended' && (
               <div className="mt-2">
                 <button
                   onClick={async () => {
@@ -850,7 +850,7 @@ export function AudioMasteringPlugin() {
                   Activate Audio Engine
                 </button>
               </div>
-            )}
+            )} */}
             {isLoading && (
               <p className="text-yellow-400 text-xs mt-1">Loading audio...</p>
             )}
