@@ -940,6 +940,10 @@ export function LandingPage({ onGetStarted, onViewFeatures, onViewAbout, onViewS
                   <Headphones className="w-4 h-4" />
                   <span>Audio Engineer</span>
                 </div>
+                <div className="flex items-center justify-center gap-2 text-yellow-400 text-sm">
+                  <Headphones className="w-4 h-4" />
+                  <span>Audio Educator</span>
+                </div>
               </div>
 
               <p className="text-zinc-400 text-sm text-center leading-relaxed mb-6">
