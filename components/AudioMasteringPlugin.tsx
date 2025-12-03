@@ -815,35 +815,46 @@ export function AudioMasteringPlugin() {
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6 mb-6">
-        <div className="order-1 md:order-0">
-          <h1 className="text-zinc-100 tracking-wider">MASTER PRO</h1>
-          <p className="text-zinc-500 text-xs mt-1">Professional Audio Mastering Plugin</p>
-          {audioFileName && (
-            <p className="text-cyan-400 text-xs mt-1">📁 {audioFileName}</p>
-          )}
-          {!isInitialized && (
-            <p className="text-yellow-400 text-xs mt-1">Initializing audio engine...</p>
-          )}
-          {isInitialized && contextState === 'suspended' && (
-            <div className="mt-2">
-              <button
-                onClick={async () => {
-                  try {
-                    await resumeContext();
-                    showToast('Audio engine activated!', 'success');
-                  } catch {
-                    showToast('Failed to activate audio engine', 'error');
-                  }
-                }}
-                className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1 rounded text-xs transition-colors"
-              >
-                Activate Audio Engine
-              </button>
-            </div>
-          )}
-          {isLoading && (
-            <p className="text-yellow-400 text-xs mt-1">Loading audio...</p>
-          )}
+        <div className="order-1 md:order-0 flex items-center gap-3">
+          <div className="relative w-30 h-30 shrink-0">
+            <Image
+              src="/logo.png"
+              alt="MasterPro Logo"
+              fill
+              className="object-contain"
+              sizes="180px"
+            />
+          </div>
+          <div>
+            
+            
+            {audioFileName && (
+              <p className="text-cyan-400 text-xs mt-1">📁 {audioFileName}</p>
+            )}
+            {!isInitialized && (
+              <p className="text-yellow-400 text-xs mt-1">Initializing audio engine...</p>
+            )}
+            {isInitialized && contextState === 'suspended' && (
+              <div className="mt-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      await resumeContext();
+                      showToast('Audio engine activated!', 'success');
+                    } catch {
+                      showToast('Failed to activate audio engine', 'error');
+                    }
+                  }}
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1 rounded text-xs transition-colors"
+                >
+                  Activate Audio Engine
+                </button>
+              </div>
+            )}
+            {isLoading && (
+              <p className="text-yellow-400 text-xs mt-1">Loading audio...</p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 md:gap-4 flex-wrap md:flex-nowrap order-2 md:order-0 w-full md:w-auto overflow-x-auto whitespace-nowrap">
           {/* Upload Button */}
@@ -1738,8 +1749,8 @@ export function AudioMasteringPlugin() {
                   {(() => {
                     if (!limiterEnabled || !analysisData) return '0.0 dB';
                     // Calculate peak level from analysis data
-                    const peakLeft = analysisData.vuLeft;
-                    const peakRight = analysisData.vuRight;
+                    const peakLeft = analysisData?.vuLeft ?? 0;
+                    const peakRight = analysisData?.vuRight ?? 0;
                     const peakLevel = Math.max(peakLeft, peakRight);
                     const reduction = calculateLimiterGainReduction(peakLevel, limiterThreshold);
                     return reduction > 0 ? `-${reduction.toFixed(1)} dB` : '0.0 dB';
