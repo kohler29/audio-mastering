@@ -26,62 +26,6 @@ interface AboutPageProps {
   onGetStarted: () => void;
 }
 
-// Komponen untuk menampilkan logo teknologi
-function TechLogo({ name, className }: { name: string; className?: string }) {
-  const logoClass = className || 'w-8 h-8 mx-auto mb-2';
-  
-  switch (name) {
-    case 'React':
-      return (
-        <svg className={logoClass} viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="12" r="2" fill="#61DAFB" />
-          <ellipse cx="12" cy="12" rx="11" ry="4.2" fill="none" stroke="#61DAFB" strokeWidth="1" />
-          <ellipse cx="12" cy="12" rx="11" ry="4.2" fill="none" stroke="#61DAFB" strokeWidth="1" transform="rotate(60 12 12)" />
-          <ellipse cx="12" cy="12" rx="11" ry="4.2" fill="none" stroke="#61DAFB" strokeWidth="1" transform="rotate(-60 12 12)" />
-        </svg>
-      );
-    case 'TypeScript':
-      return (
-        <svg className={logoClass} viewBox="0 0 24 24" fill="#3178C6">
-          <rect width="24" height="24" rx="4" fill="#3178C6" />
-          <path d="M1.125 0C.502 0 0 .502 0 1.125v21.75C0 23.498.502 24 1.125 24h21.75c.623 0 1.125-.502 1.125-1.125V1.125C24 .502 23.498 0 22.875 0zm17.363 9.75c.612 0 1.154.037 1.627.111a6.38 6.38 0 0 1 1.306.34v2.458a3.95 3.95 0 0 0-.643-.361 5.093 5.093 0 0 0-.717-.26 5.453 5.453 0 0 0-1.426-.2c-.3 0-.573.028-.819.086a2.1 2.1 0 0 0-.623.242c-.17.104-.3.229-.393.374a.888.888 0 0 0-.14.49c0 .196.053.373.156.529.104.156.252.304.443.444s.423.276.696.41c.273.135.582.274.926.416.47.197.892.407 1.266.628.374.222.695.473.963.753.268.279.472.598.614.957.142.359.214.776.214 1.253 0 .657-.125 1.21-.373 1.656a3.033 3.033 0 0 1-1.012 1.085 4.38 4.38 0 0 1-1.487.596c-.566.12-1.163.18-1.79.18a9.916 9.916 0 0 1-1.84-.164 5.544 5.544 0 0 1-1.512-.493v-2.63a5.033 5.033 0 0 0 3.237 1.2c.333 0 .624-.03.872-.09.249-.06.456-.144.623-.25.166-.108.29-.234.373-.38a1.023 1.023 0 0 0-.074-1.089 2.12 2.12 0 0 0-.537-.5 5.597 5.597 0 0 0-.807-.444 8.916 8.916 0 0 0-1.007-.436c-.918-.383-1.602-.852-2.053-1.405-.45-.553-.676-1.222-.676-2.005 0-.614.123-1.141.369-1.582.246-.441.58-.804.999-1.089a4.494 4.494 0 0 1 1.43-.629 5.414 5.414 0 0 1 1.713-.272zm-15.113.188h9.563v2.166H9.506v9.646H6.789v-9.646H3.375z" fill="white" />
-        </svg>
-      );
-    case 'Tailwind CSS':
-      return (
-        <svg className={logoClass} viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 6c-2.67 0-4.33 1.33-5 4 1-1.33 2.17-1.83 3.5-1.5.76.19 1.31.74 1.91 1.35.98 1 2.12 2.15 4.09 2.15 2.67 0 4.33-1.33 5-4-1 1.33-2.17 1.83-3.5 1.5-.76-.19-1.31-.74-1.91-1.35C15.61 7.15 14.47 6 12 6zm-5 6c-2.67 0-4.33 1.33-5 4 1-1.33 2.17-1.83 3.5-1.5.76.19 1.31.74 1.91 1.35.98 1 2.12 2.15 4.09 2.15 2.67 0 4.33-1.33 5-4-1 1.33-2.17 1.83-3.5 1.5-.76-.19-1.31-.74-1.91-1.35C10.61 13.15 9.47 12 7 12z" fill="#06B6D4" />
-        </svg>
-      );
-    case 'Motion':
-      return (
-        <svg className={logoClass} viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2.4c5.302 0 9.6 4.298 9.6 9.6S17.302 21.6 12 21.6 2.4 17.302 2.4 12 6.698 2.4 12 2.4zm-1.2 4.8v9.6l7.2-4.8-7.2-4.8z" fill="#FF0055" />
-        </svg>
-      );
-    case 'Web Audio API':
-      return <Waves className={logoClass} />;
-    case 'Canvas API':
-      return <Palette className={logoClass} />;
-    case 'Next JS':
-      return (
-        <svg className={logoClass} viewBox="0 0 24 24" fill="currentColor">
-          <path d="M11.57 23.995l-.006-.002a.299.299 0 01-.128-.027l-9.5-5.5a.3.3 0 01-.15-.26V5.79a.3.3 0 01.15-.26l9.5-5.5a.3.3 0 01.3 0l9.5 5.5a.3.3 0 01.15.26v12.42a.3.3 0 01-.15.26l-9.5 5.5a.3.3 0 01-.172.025zm-.01-1.36l.006.002 8.82-5.1V6.46l-8.82-5.1-8.82 5.1v11.08l8.814 5.1z" fill="currentColor" />
-          <path d="M6.774 7.9v8.2l5.364-3.1v-2.1L8.4 12l3.738-2.1V7.9L6.774 7.9zm10.452 0v8.2l-5.364-3.1v-2.1L15.6 12l-3.738-2.1V7.9l5.364 0z" fill="currentColor" />
-        </svg>
-      );
-    case 'Lucide Icons':
-      return (
-        <svg className={logoClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 2v20M2 12h20" />
-        </svg>
-      );
-    default:
-      return <Code className={logoClass} />;
-  }
-}
-
 export function AboutPage({ onBack, onGetStarted }: AboutPageProps) {
   return (
     <div className="min-h-screen bg-linear-to-br from-zinc-950 via-zinc-900 to-zinc-950">
@@ -657,50 +601,6 @@ export function AboutPage({ onBack, onGetStarted }: AboutPageProps) {
                 Always improving, learning, and pushing the boundaries of what&apos;s possible
               </p>
             </motion.div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tech Stack */}
-      <div className="relative px-6 py-20">
-        <div className="max-w-6xl mx-auto">
-          <motion.div 
-            className="text-center mb-16"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-          >
-            <h2 className="text-4xl text-white mb-4">Built With</h2>
-            <p className="text-zinc-400 text-lg">Modern technologies powering MasterPro</p>
-          </motion.div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { name: 'React', color: 'cyan' },
-              { name: 'TypeScript', color: 'blue' },
-              { name: 'Tailwind CSS', color: 'purple' },
-              { name: 'Motion', color: 'pink' },
-              { name: 'Web Audio API', color: 'emerald' },
-              { name: 'Canvas API', color: 'orange' },
-              { name: 'Next JS', color: 'yellow' },
-              { name: 'Lucide Icons', color: 'red' }
-            ].map((tech, i) => (
-              <motion.div
-                key={i}
-                className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 hover:border-cyan-500/50 rounded-xl p-4 text-center transition-all"
-                initial={{ scale: 0, rotate: -180 }}
-                whileInView={{ scale: 1, rotate: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.05, type: "spring" }}
-                whileHover={{ scale: 1.1, y: -5 }}
-              >
-                <div className="mb-2 flex items-center justify-center">
-                  <TechLogo name={tech.name} className={`w-8 h-8 text-${tech.color}-400`} />
-                </div>
-                <div className="text-zinc-300 text-sm">{tech.name}</div>
-              </motion.div>
-            ))}
           </div>
         </div>
       </div>

@@ -2331,18 +2331,6 @@ export function AudioMasteringPlugin() {
                   </div>
                 </div>
               </div>
-
-              {/* Tech Stack */}
-              <div className="mb-12">
-                <h2 className="text-3xl text-white mb-8 text-center">Built With</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {['React', 'TypeScript', 'Tailwind CSS', 'Next.js', 'Web Audio API', 'Canvas API', 'Framer Motion', 'Lucide Icons'].map((tech) => (
-                    <div key={tech} className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 text-center">
-                      <div className="text-zinc-300 text-sm">{tech}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* Modal Footer */}
