@@ -251,7 +251,7 @@ export function AuthPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm"
                   >
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{error || authError}</span>
                   </motion.div>
                 )}

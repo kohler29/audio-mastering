@@ -742,7 +742,10 @@ export function AudioMasteringPlugin() {
     }
   };
 
-  const handleExportWithFormat = async (format: string, quality: string) => {
+  const handleExportWithFormat = async (
+    format: 'wav' | 'mp3' | 'flac',
+    quality: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless'
+  ) => {
     try {
       if (!audioFile) {
         showToast('Please load an audio file first.', 'error');
@@ -753,24 +756,43 @@ export function AudioMasteringPlugin() {
       const exportSettings = { ...settings, exportFadeInMs, exportFadeOutMs };
       console.log('Exporting with settings:', exportSettings);
       
-      const blob = await exportAudio(exportSettings, format as 'wav' | 'mp3' | 'flac');
+      const blob = await exportAudio(exportSettings, format, quality);
       
       if (!blob || blob.size === 0) {
         throw new Error('Exported blob is empty');
       }
       
+      // Generate filename dengan informasi kualitas
+      let qualitySuffix = '';
+      if (format === 'wav') {
+        if (quality === 'wav_24_192') {
+          qualitySuffix = '_192kHz_24bit';
+        } else if (quality === 'wav_24_96') {
+          qualitySuffix = '_96kHz_24bit';
+        } else if (quality === '24bit') {
+          qualitySuffix = '_48kHz_24bit';
+        } else if (quality === '16bit') {
+          qualitySuffix = '_44.1kHz_16bit';
+        }
+      } else if (format === 'mp3') {
+        qualitySuffix = '_320kbps';
+      } else if (format === 'flac') {
+        qualitySuffix = '_lossless';
+      }
+
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = audioFileName 
-        ? `${audioFileName.replace(/\.[^/.]+$/, '')}_mastered.${format}`
-        : `mastered.${format}`;
+      const baseName = audioFileName 
+        ? audioFileName.replace(/\.[^/.]+$/, '')
+        : 'mastered';
+      link.download = `${baseName}_mastered${qualitySuffix}.${format}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      const qualityLabel = format === 'mp3' ? '320 kbps' : format === 'flac' ? 'lossless' : quality;
+      const qualityLabel = format === 'mp3' ? '320 kbps' : format === 'flac' ? 'lossless' : quality === 'wav_24_192' ? '192kHz 24-bit' : quality === 'wav_24_96' ? '96kHz 24-bit' : quality;
       showToast(`Export successful! Audio exported as ${format.toUpperCase()}${qualityLabel ? ` (${qualityLabel})` : ''}.`, 'success');
     } catch (err) {
       console.error('Export failed:', err);

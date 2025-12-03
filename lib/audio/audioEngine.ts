@@ -1758,15 +1758,35 @@ export class AudioEngine {
   /**
    * Ekspor audio dalam format WAV, MP3 (320kbps), atau FLAC.
    * Untuk MP3/FLAC, proses: render buffer -> tulis WAV in-memory -> transcode via ffmpeg.wasm.
+   *
+   * quality:
+   * - WAV:
+   *   - '16bit' | '24bit' -> gunakan sample rate asli buffer
+   *   - 'wav_24_96' -> 24-bit / 96 kHz (hi-res)
+   *   - 'wav_24_192' -> 24-bit / 192 kHz (hi-res+)
+   * - MP3: '320k'
+   * - FLAC: 'lossless'
    */
-  async exportAudio(settings: AudioEngineSettings, format: 'wav' | 'mp3' | 'flac' = 'wav'): Promise<Blob> {
+  async exportAudio(
+    settings: AudioEngineSettings,
+    format: 'wav' | 'mp3' | 'flac' = 'wav',
+    quality?: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless'
+  ): Promise<Blob> {
+    console.log('[Export] Format:', format, 'Quality:', quality);
     if (!this.audioBuffer) {
       throw new Error('No audio loaded');
     }
 
     try {
-      const sampleRate = this.audioBuffer.sampleRate;
-      const length = this.audioBuffer.length;
+      const sourceSampleRate = this.audioBuffer.sampleRate;
+      // Tentukan sample rate target untuk WAV hi-res tanpa FFmpeg jika memungkinkan
+      let sampleRate = sourceSampleRate;
+      if (format === 'wav' && quality) {
+        if (quality === 'wav_24_96') sampleRate = 96000;
+        if (quality === 'wav_24_192') sampleRate = 192000;
+      }
+      // Hitung panjang target berdasarkan durasi dan sample rate target
+      const length = Math.max(1, Math.round(this.audioBuffer.duration * sampleRate));
       const numberOfChannels = this.audioBuffer.numberOfChannels;
 
       // Create offline context
@@ -2018,35 +2038,80 @@ export class AudioEngine {
           if (!wav || (wav instanceof ArrayBuffer && wav.byteLength === 0)) {
             throw new Error('WAV conversion produced empty buffer');
           }
-          // Jika format target WAV, langsung return
+          // Jika format target WAV, handle opsi hi-res 24-bit via FFmpeg lalu return
           if (format === 'wav') {
+            if (quality === 'wav_24_96' || quality === 'wav_24_192') {
+              try {
+                const { createFFmpegFn, fetchFileFn } = await this.getFFmpegLoader();
+                const corePath = (process.env.NEXT_PUBLIC_FFMPEG_CORE_URL || '').trim() || '/ffmpeg/ffmpeg-core.js';
+                const ffmpeg = createFFmpegFn({ log: false, corePath });
+                await ffmpeg.load();
+
+                const inputName = 'input.wav';
+                const inputData = await fetchFileFn(new Blob([wav], { type: 'audio/wav' }));
+                ffmpeg.FS('writeFile', inputName, inputData as Uint8Array);
+
+                const targetSampleRate = quality === 'wav_24_192' ? '192000' : '96000';
+                const outputName = `output_${quality}_24bit.wav`;
+                await ffmpeg.run(
+                  '-i', inputName,
+                  '-af', `aresample=${targetSampleRate}`,
+                  '-ar', targetSampleRate,
+                  '-ac', '2',
+                  '-acodec', 'pcm_s24le',
+                  '-sample_fmt', 's24',
+                  '-f', 'wav',
+                  '-y', outputName
+                );
+                const data = ffmpeg.FS('readFile', outputName) as Uint8Array;
+                const ab = new ArrayBuffer(data.byteLength);
+                const view = new Uint8Array(ab);
+                view.set(data);
+                return new Blob([ab], { type: 'audio/wav' });
+              } catch (ffmpegErr: unknown) {
+                console.error('[Export] FFmpeg WAV 24-bit conversion failed:', ffmpegErr);
+                // Fallback ke WAV standar jika FFmpeg gagal
+                return new Blob([wav], { type: 'audio/wav' });
+              }
+            }
+            // Return WAV standar jika tidak meminta hi-res
             return new Blob([wav], { type: 'audio/wav' });
           }
 
           // Untuk MP3/FLAC, transcode dengan ffmpeg.wasm
           try {
-            const { getFFmpegInstance, fetchFile } = await import('./ffmpegLoader');
-            const ffmpeg = await getFFmpegInstance();
+            const { createFFmpegFn, fetchFileFn } = await this.getFFmpegLoader();
+            const corePath = (process.env.NEXT_PUBLIC_FFMPEG_CORE_URL || '').trim() || '/ffmpeg/ffmpeg-core.js';
+            const ffmpeg = createFFmpegFn({ log: false, corePath });
+            await ffmpeg.load();
 
             // Tulis input WAV ke FS
             const inputName = 'input.wav';
-            const inputData = await fetchFile(new Blob([wav], { type: 'audio/wav' }));
-            await ffmpeg.writeFile(inputName, inputData);
+            const inputData = await fetchFileFn(new Blob([wav], { type: 'audio/wav' }));
+            ffmpeg.FS('writeFile', inputName, inputData as Uint8Array);
+
+            // WAV hi-res ditangani di atas sebelum return
 
             if (format === 'mp3') {
               // MP3 320kbps CBR
-              const outputName = 'output.mp3';
-              await ffmpeg.exec(['-i', inputName, '-b:a', '320k', '-codec:a', 'libmp3lame', outputName]);
-              const data = await ffmpeg.readFile(outputName);
-              return new Blob([new Uint8Array(data)], { type: 'audio/mpeg' });
+              const outputName = 'output_320k.mp3';
+              await ffmpeg.run('-i', inputName, '-b:a', '320k', '-codec:a', 'libmp3lame', outputName);
+              const data = ffmpeg.FS('readFile', outputName) as Uint8Array;
+              const ab = new ArrayBuffer(data.byteLength);
+              const view = new Uint8Array(ab);
+              view.set(data);
+              return new Blob([ab], { type: 'audio/mpeg' });
             }
 
             if (format === 'flac') {
               // FLAC lossless
               const outputName = 'output.flac';
-              await ffmpeg.exec(['-i', inputName, '-c:a', 'flac', outputName]);
-              const data = await ffmpeg.readFile(outputName);
-              return new Blob([new Uint8Array(data)], { type: 'audio/flac' });
+              await ffmpeg.run('-i', inputName, '-c:a', 'flac', outputName);
+              const data = ffmpeg.FS('readFile', outputName) as Uint8Array;
+              const ab = new ArrayBuffer(data.byteLength);
+              const view = new Uint8Array(ab);
+              view.set(data);
+              return new Blob([ab], { type: 'audio/flac' });
             }
           } catch (ffmpegErr: unknown) {
             console.error('[Export] FFmpeg conversion failed:', ffmpegErr);
@@ -2380,9 +2445,9 @@ export class AudioEngine {
         const fetchFileFn = ffmpegGlobal?.fetchFile;
 
         if (!createFFmpegFn || !fetchFileFn) {
-          // Coba alternatif: mungkin fungsi langsung di window
-          const altCreate = (window as any).createFFmpeg;
-          const altFetch = (window as any).fetchFile;
+          const w = window as unknown as { createFFmpeg?: FF['createFFmpeg']; fetchFile?: FF['fetchFile'] };
+          const altCreate = w.createFFmpeg;
+          const altFetch = w.fetchFile;
 
           if (altCreate && altFetch) {
             this.ffmpegLoaderCache = {
@@ -2390,6 +2455,18 @@ export class AudioEngine {
               fetchFileFn: altFetch
             };
             return this.ffmpegLoaderCache;
+          }
+
+          try {
+            const mod = (await import('@ffmpeg/ffmpeg')) as unknown as FF;
+            const esmCreate = mod.createFFmpeg || mod.default?.createFFmpeg;
+            const esmFetch = mod.fetchFile || mod.default?.fetchFile;
+            if (esmCreate && esmFetch) {
+              this.ffmpegLoaderCache = { createFFmpegFn: esmCreate, fetchFileFn: esmFetch };
+              return this.ffmpegLoaderCache;
+            }
+          } catch (esmErr) {
+            console.error('[FFmpeg] ESM import (browser) failed:', esmErr);
           }
 
           throw new Error('FFmpeg UMD loaded but functions not found in global scope');

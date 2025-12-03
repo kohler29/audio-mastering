@@ -20,7 +20,11 @@ export interface UseAudioEngineReturn {
   seek: (time: number) => void;
   updateSettings: (settings: Partial<AudioEngineSettings>) => void;
   setupAudioChain: (settings: AudioEngineSettings) => Promise<void>;
-  exportAudio: (settings: AudioEngineSettings, format?: 'wav' | 'mp3' | 'flac') => Promise<Blob>;
+  exportAudio: (
+    settings: AudioEngineSettings,
+    format?: 'wav' | 'mp3' | 'flac',
+    quality?: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless'
+  ) => Promise<Blob>;
   resumeContext: () => Promise<void>;
   fadeIn: (durationMs: number) => void;
   fadeOut: (durationMs: number) => void;
@@ -197,13 +201,17 @@ export function useAudioEngine(): UseAudioEngineReturn {
     }
   }, [engine]);
 
-  const exportAudio = useCallback(async (settings: AudioEngineSettings, format: 'wav' | 'mp3' | 'flac' = 'wav'): Promise<Blob> => {
+  const exportAudio = useCallback(async (
+    settings: AudioEngineSettings,
+    format: 'wav' | 'mp3' | 'flac' = 'wav',
+    quality?: '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless'
+  ): Promise<Blob> => {
     if (!engine) {
       throw new Error('Audio engine not initialized');
     }
 
     try {
-      return await engine.exportAudio(settings, format);
+      return await engine.exportAudio(settings, format, quality);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to export audio';
       setError(errorMessage);

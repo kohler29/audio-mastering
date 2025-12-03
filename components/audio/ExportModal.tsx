@@ -3,19 +3,23 @@
 import { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 
+type ExportFormat = 'wav' | 'mp3' | 'flac';
+
+type ExportQuality = '16bit' | '24bit' | 'wav_24_96' | 'wav_24_192' | '320k' | 'lossless';
+
 interface ExportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onExport: (format: string, quality: string) => Promise<void>;
+  onExport: (format: ExportFormat, quality: ExportQuality) => Promise<void>;
 }
 
 export function ExportModal({ isOpen, onClose, onExport }: ExportModalProps) {
   const [isExporting, setIsExporting] = useState(false);
-  const [selectedFormat, setSelectedFormat] = useState<string>('wav');
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('wav');
 
   if (!isOpen) return null;
 
-  const handleExport = async (format: string, quality: string) => {
+  const handleExport = async (format: ExportFormat, quality: ExportQuality) => {
     setIsExporting(true);
     try {
       await onExport(format, quality);
@@ -132,11 +136,19 @@ export function ExportModal({ isOpen, onClose, onExport }: ExportModalProps) {
                     </button>
                     <button 
                       onClick={() => {
-                        handleExport(selectedFormat, '32bit');
+                        handleExport(selectedFormat, 'wav_24_96');
                       }}
                       className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
                     >
-                      32-bit / 96kHz (High-Res)
+                      24-bit / 96kHz (High-Res)
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleExport(selectedFormat, 'wav_24_192');
+                      }}
+                      className="w-full bg-zinc-700 hover:bg-cyan-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors text-left"
+                    >
+                      24-bit / 192kHz (Hi-Res+)
                     </button>
                   </>
                 )}
