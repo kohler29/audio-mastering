@@ -1,3 +1,6 @@
+// FFmpeg akan di-load secara dynamic untuk kompatibilitas dengan Next.js/Turbopack
+// Static import dicoba di getFFmpegLoader() untuk fallback
+
 export interface AudioEngineSettings {
   inputGain: number;
   outputGain: number;
@@ -2053,23 +2056,120 @@ export class AudioEngine {
           // Untuk MP3/FLAC, transcode dengan ffmpeg.wasm
           try {
             const { createFFmpegFn, fetchFileFn } = await this.getFFmpegLoader();
-            const corePath = (process.env.NEXT_PUBLIC_FFMPEG_CORE_URL || '').trim() || '/ffmpeg/ffmpeg-core.js';
-            const ffmpeg = createFFmpegFn({ log: false, corePath });
-            await ffmpeg.load();
+            // Gunakan path lokal untuk menghindari CSP issues
+            // Pastikan menggunakan origin yang sama untuk menghindari CORS
+            const getLocalPath = (relativePath: string): string => {
+              if (typeof window !== 'undefined') {
+                return new URL(relativePath, window.location.origin).href;
+              }
+              return relativePath;
+            };
+            
+            const coreJsPath = getLocalPath('/ffmpeg/ffmpeg-core.js');
+            const coreWasmPath = getLocalPath('/ffmpeg/ffmpeg-core.wasm');
+            
+            console.log('[Export] Creating FFmpeg instance with corePath:', coreJsPath);
+            console.log('[Export] WASM path:', coreWasmPath);
+            
+            // Verifikasi file WASM dapat diakses sebelum load
+            try {
+              const wasmCheck = await fetch(coreWasmPath, { method: 'HEAD' });
+              if (!wasmCheck.ok) {
+                throw new Error(`WASM file not found or not accessible: ${coreWasmPath} (status: ${wasmCheck.status})`);
+              }
+              console.log('[Export] WASM file verified, accessible');
+            } catch (fetchErr) {
+              console.error('[Export] Failed to verify WASM file:', fetchErr);
+              throw new Error(`Cannot access FFmpeg WASM file at ${coreWasmPath}. Pastikan file ada di /public/ffmpeg/ffmpeg-core.wasm`);
+            }
+            const ffmpeg = createFFmpegFn({ 
+              log: true, 
+              corePath: coreJsPath,
+              // Untuk API baru, kita akan handle di adapter
+            });
+            console.log('[Export] Loading FFmpeg...');
+            
+            // Tambahkan timeout untuk menghindari hang
+            const loadPromise = ffmpeg.load();
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error('FFmpeg load timeout after 30 seconds')), 30000);
+            });
+            
+            try {
+              await Promise.race([loadPromise, timeoutPromise]);
+              console.log('[Export] FFmpeg loaded successfully');
+            } catch (loadError) {
+              console.error('[Export] FFmpeg load failed:', loadError);
+              throw new Error(`Failed to load FFmpeg: ${loadError instanceof Error ? loadError.message : 'Unknown error'}. Pastikan file ffmpeg-core.js dan ffmpeg-core.wasm ada di /public/ffmpeg/`);
+            }
 
             // Tulis input WAV ke FS
             const inputName = 'input.wav';
+            console.log('[Export] Writing input WAV to FS, size:', wav.byteLength);
             const inputData = await fetchFileFn(new Blob([wav], { type: 'audio/wav' }));
-            ffmpeg.FS('writeFile', inputName, inputData as Uint8Array);
+            if (!(inputData instanceof Uint8Array)) {
+              throw new Error('fetchFileFn did not return Uint8Array');
+            }
+            ffmpeg.FS('writeFile', inputName, inputData);
+            console.log('[Export] Input WAV written to FS');
 
             // WAV hi-res ditangani di atas sebelum return
 
             if (format === 'mp3') {
-              // MP3 CBR (128 kbps atau 320 kbps)
+              // MP3 CBR (128 kbps atau 320 kbps) dengan parameter optimal
               const bitrate = quality === '128k' ? '128k' : '320k';
               const outputName = bitrate === '128k' ? 'output_128k.mp3' : 'output_320k.mp3';
-              await ffmpeg.run('-i', inputName, '-b:a', bitrate, '-codec:a', 'libmp3lame', outputName);
-              const data = ffmpeg.FS('readFile', outputName) as Uint8Array;
+              console.log(`[Export] Converting to MP3 with bitrate ${bitrate}, output: ${outputName}`);
+              // Parameter optimal untuk MP3:
+              // -b:a: bitrate audio (CBR)
+              // -ar: sample rate (preserve dari input)
+              // -ac: channel count (preserve dari input)
+              // -codec:a libmp3lame: encoder MP3
+              try {
+                await ffmpeg.run(
+                  '-i', inputName,
+                  '-codec:a', 'libmp3lame',
+                  '-b:a', bitrate,
+                  '-ar', String(renderedBuffer.sampleRate),
+                  '-ac', String(renderedBuffer.numberOfChannels),
+                  '-y', // overwrite output file
+                  outputName
+                );
+                console.log('[Export] MP3 conversion completed');
+              } catch (runErr) {
+                console.error('[Export] FFmpeg run error:', runErr);
+                throw new Error(`MP3 conversion failed: ${runErr instanceof Error ? runErr.message : 'Unknown error'}`);
+              }
+              
+              // Baca file output - handle baik API lama maupun baru
+              let data: Uint8Array;
+              
+              // Coba akses instance langsung untuk API baru
+              const ffmpegInstance = (ffmpeg as any).__instance;
+              if (ffmpegInstance && ffmpegInstance.readFile && typeof ffmpegInstance.readFile === 'function') {
+                // API baru: readFile adalah async method
+                console.log('[Export] Using instance.readFile() for MP3 (API baru)');
+                data = await ffmpegInstance.readFile(outputName);
+              } else {
+                // API lama: gunakan FS('readFile', ...)
+                console.log('[Export] Using FS("readFile", ...) for MP3 (API lama)');
+                const readResult = ffmpeg.FS('readFile', outputName);
+                
+                // Jika readFile mengembalikan Promise (beberapa implementasi), await
+                if (readResult instanceof Promise) {
+                  data = await readResult;
+                } else if (readResult instanceof Uint8Array) {
+                  data = readResult;
+                } else {
+                  throw new Error(`Cannot read MP3 output file ${outputName}. readFile returned: ${readResult}`);
+                }
+              }
+              
+              if (!data || data.length === 0) {
+                throw new Error('MP3 export produced empty file');
+              }
+              console.log(`[Export] MP3 file size: ${data.length} bytes`);
+              // Konversi ke ArrayBuffer untuk kompatibilitas dengan Blob
               const ab = new ArrayBuffer(data.byteLength);
               const view = new Uint8Array(ab);
               view.set(data);
@@ -2077,10 +2177,59 @@ export class AudioEngine {
             }
 
             if (format === 'flac') {
-              // FLAC lossless
+              // FLAC lossless dengan compression level optimal
               const outputName = 'output.flac';
-              await ffmpeg.run('-i', inputName, '-c:a', 'flac', outputName);
-              const data = ffmpeg.FS('readFile', outputName) as Uint8Array;
+              console.log('[Export] Converting to FLAC, output:', outputName);
+              // Parameter optimal untuk FLAC:
+              // -c:a flac: encoder FLAC
+              // -compression_level 5: balance antara ukuran file dan kecepatan (0-8, default 5)
+              // -ar: sample rate (preserve dari input)
+              // -ac: channel count (preserve dari input)
+              try {
+                await ffmpeg.run(
+                  '-i', inputName,
+                  '-c:a', 'flac',
+                  '-compression_level', '5',
+                  '-ar', String(renderedBuffer.sampleRate),
+                  '-ac', String(renderedBuffer.numberOfChannels),
+                  '-y', // overwrite output file
+                  outputName
+                );
+                console.log('[Export] FLAC conversion completed');
+              } catch (runErr) {
+                console.error('[Export] FFmpeg run error:', runErr);
+                throw new Error(`FLAC conversion failed: ${runErr instanceof Error ? runErr.message : 'Unknown error'}`);
+              }
+              
+              // Baca file output - handle baik API lama maupun baru
+              let data: Uint8Array;
+              
+              // Coba akses instance langsung untuk API baru
+              const ffmpegInstance = (ffmpeg as any).__instance;
+              if (ffmpegInstance && ffmpegInstance.readFile && typeof ffmpegInstance.readFile === 'function') {
+                // API baru: readFile adalah async method
+                console.log('[Export] Using instance.readFile() for FLAC (API baru)');
+                data = await ffmpegInstance.readFile(outputName);
+              } else {
+                // API lama: gunakan FS('readFile', ...)
+                console.log('[Export] Using FS("readFile", ...) for FLAC (API lama)');
+                const readResult = ffmpeg.FS('readFile', outputName);
+                
+                // Jika readFile mengembalikan Promise (beberapa implementasi), await
+                if (readResult instanceof Promise) {
+                  data = await readResult;
+                } else if (readResult instanceof Uint8Array) {
+                  data = readResult;
+                } else {
+                  throw new Error(`Cannot read FLAC output file ${outputName}. readFile returned: ${readResult}`);
+                }
+              }
+              
+              if (!data || data.length === 0) {
+                throw new Error('FLAC export produced empty file');
+              }
+              console.log(`[Export] FLAC file size: ${data.length} bytes`);
+              // Konversi ke ArrayBuffer untuk kompatibilitas dengan Blob
               const ab = new ArrayBuffer(data.byteLength);
               const view = new Uint8Array(ab);
               view.set(data);
@@ -2088,13 +2237,9 @@ export class AudioEngine {
             }
           } catch (ffmpegErr: unknown) {
             console.error('[Export] FFmpeg conversion failed:', ffmpegErr);
-            // Fallback ke WAV jika FFmpeg gagal
+            // Fallback: kembalikan WAV agar ekspor tetap berjalan
             console.warn(`[Export] Falling back to WAV format due to FFmpeg error`);
-            throw new Error(
-              `Cannot export as ${format.toUpperCase()} - FFmpeg not available. ` +
-              `Please download as WAV instead. ` +
-              `Error: ${ffmpegErr instanceof Error ? ffmpegErr.message : 'Unknown error'}`
-            );
+            return new Blob([wav], { type: 'audio/wav' });
           }
         } catch (err: unknown) {
           console.error('WAV conversion error:', err);
@@ -2382,78 +2527,327 @@ export class AudioEngine {
       default?: FF;
     };
 
-    // Di browser, langsung gunakan UMD untuk kompatibilitas maksimal
-    if (typeof window !== 'undefined') {
+    // Di browser, gunakan berbagai strategi untuk load FFmpeg
+    if (typeof self !== 'undefined' || typeof window !== 'undefined') {
+      // Strategy 1: Dynamic import dengan berbagai cara akses
+      try {
+        const mod = (await import('@ffmpeg/ffmpeg')) as unknown as FF;
+        
+        // Coba berbagai cara untuk mendapatkan createFFmpeg dan fetchFile
+        let createFFmpegFn = mod.createFFmpeg || mod.default?.createFFmpeg;
+        let fetchFileFn = mod.fetchFile || mod.default?.fetchFile;
+        
+        // Jika tidak ada createFFmpeg, coba gunakan FFmpeg class langsung (new API)
+        if (!createFFmpegFn) {
+          const FFmpegClass = (mod as any).FFmpeg || (mod as any).default?.FFmpeg || (mod as any).default;
+          if (FFmpegClass && typeof FFmpegClass === 'function') {
+            createFFmpegFn = (opts: { log: boolean; corePath?: string }) => {
+              const instance = new FFmpegClass();
+              // Adapt new API to old API
+              // Pastikan menggunakan path lokal untuk menghindari CSP issues
+              const getLocalPath = (relativePath: string): string => {
+                if (typeof window !== 'undefined') {
+                  return new URL(relativePath, window.location.origin).href;
+                }
+                return relativePath;
+              };
+              
+              const corePath = opts.corePath || '/ffmpeg/ffmpeg-core.js';
+              const coreJsPath = getLocalPath(corePath);
+              const coreWasmPath = getLocalPath(corePath.replace('.js', '.wasm'));
+              
+              return {
+                load: async () => {
+                  if (instance.load && typeof instance.load === 'function') {
+                    // New API: load dengan config menggunakan path lokal
+                    // coreURL untuk JS file, wasmURL untuk WASM file
+                    console.log('[FFmpeg] Loading with config - coreURL:', coreJsPath, 'wasmURL:', coreWasmPath);
+                    try {
+                      // Coba dengan konfigurasi lengkap
+                      const loadConfig: {
+                        coreURL?: string;
+                        wasmURL?: string;
+                        classWorkerURL?: string;
+                        mainScriptUrlOrBlob?: string;
+                      } = {
+                        coreURL: coreJsPath,
+                        wasmURL: coreWasmPath,
+                      };
+                      
+                      // Coba load dengan config
+                      await instance.load(loadConfig);
+                      console.log('[FFmpeg] Loaded successfully with config');
+                    } catch (loadErr) {
+                      console.warn('[FFmpeg] Load with config failed:', loadErr);
+                      // Fallback: coba load tanpa config
+                      try {
+                        await instance.load();
+                        console.log('[FFmpeg] Loaded successfully without config');
+                      } catch (fallbackErr) {
+                        console.error('[FFmpeg] Load without config also failed:', fallbackErr);
+                        throw new Error(`FFmpeg load failed: ${fallbackErr instanceof Error ? fallbackErr.message : 'Unknown error'}`);
+                      }
+                    }
+                  } else if ((instance as any).init) {
+                    await (instance as any).init();
+                  } else {
+                    throw new Error('FFmpeg instance does not have load or init method');
+                  }
+                },
+                FS: (op: string, path: string, data?: Uint8Array) => {
+                  if (op === 'writeFile') {
+                    if (instance.writeFile && typeof instance.writeFile === 'function') {
+                      return instance.writeFile(path, data!);
+                    }
+                    // Fallback ke FS API
+                    if ((instance as any).FS && typeof (instance as any).FS === 'function') {
+                      return (instance as any).FS(op, path, data);
+                    }
+                    throw new Error('FFmpeg instance does not have writeFile or FS method');
+                  }
+                  if (op === 'readFile') {
+                    // Untuk API baru, readFile adalah async, return Promise
+                    if (instance.readFile && typeof instance.readFile === 'function') {
+                      return instance.readFile(path);
+                    }
+                    // Fallback ke FS API (sync untuk API lama)
+                    if ((instance as any).FS && typeof (instance as any).FS === 'function') {
+                      const result = (instance as any).FS(op, path);
+                      // Jika hasilnya Promise, return langsung
+                      if (result instanceof Promise) {
+                        return result;
+                      }
+                      // Jika hasilnya Uint8Array, wrap dalam Promise untuk konsistensi
+                      return Promise.resolve(result);
+                    }
+                    throw new Error('FFmpeg instance does not have readFile or FS method');
+                  }
+                  // Untuk operasi FS lainnya
+                  if ((instance as any).FS && typeof (instance as any).FS === 'function') {
+                    return (instance as any).FS(op, path, data);
+                  }
+                  throw new Error(`FFmpeg instance does not support FS operation: ${op}`);
+                },
+                // Simpan reference ke instance untuk akses langsung jika diperlukan
+                __instance: instance,
+                run: async (...args: string[]) => {
+                  if (instance.exec) {
+                    await instance.exec(args);
+                  } else if ((instance as any).run) {
+                    await (instance as any).run(...args);
+                  }
+                }
+              };
+            };
+          }
+        }
+        
+        // Jika tidak ada fetchFile, buat implementasi sendiri
+        const finalFetchFileFn = fetchFileFn || (async (input: Blob | File | string): Promise<Uint8Array> => {
+          if (typeof input === 'string') {
+            const response = await fetch(input);
+            return new Uint8Array(await response.arrayBuffer());
+          }
+          return new Uint8Array(await input.arrayBuffer());
+        });
 
-      // Cek apakah sudah ada di global
-      const g = globalThis as any;
-
-      // Coba berbagai kemungkinan lokasi global FFmpeg
-      const checkGlobal = () => {
-        return g.FFmpeg || g.window?.FFmpeg || (window as any).FFmpeg;
-      };
-
-      let ffmpegGlobal = checkGlobal();
-      if (ffmpegGlobal?.createFFmpeg && ffmpegGlobal?.fetchFile) {
-        this.ffmpegLoaderCache = {
-          createFFmpegFn: ffmpegGlobal.createFFmpeg,
-          fetchFileFn: ffmpegGlobal.fetchFile
-        };
-        return this.ffmpegLoaderCache;
+        if (createFFmpegFn) {
+          this.ffmpegLoaderCache = { createFFmpegFn, fetchFileFn: finalFetchFileFn };
+          return this.ffmpegLoaderCache;
+        }
+      } catch (dynamicErr) {
+        console.warn('[FFmpeg] Dynamic import failed, trying UMD fallback:', dynamicErr);
       }
 
-      // Load UMD script
-      const umdUrl = (process.env.NEXT_PUBLIC_FFMPEG_UMD_URL || '').trim() || 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js';
+      // Strategy 2: UMD lokal (fallback jika dynamic import gagal)
+      // Coba beberapa path UMD yang mungkin
+      const umdPaths = [
+        (process.env.NEXT_PUBLIC_FFMPEG_UMD_URL || '').trim(),
+        '/ffmpeg/umd/ffmpeg.js',
+        '/ffmpeg/umd/814.ffmpeg.js'
+      ].filter(Boolean);
 
-      try {
-        await this.loadScript(umdUrl);
+      for (const umdPath of umdPaths) {
+        try {
+          console.log(`[FFmpeg] Trying to load UMD from: ${umdPath}`);
+          await this.loadScript(umdPath);
+          
+          // Tunggu sebentar agar script selesai dieksekusi
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          const g = globalThis as any;
+          const w = window as any;
+          const umdNs = g.FFmpeg || g.FFmpegWASM || w.FFmpeg || w.FFmpegWASM || 
+                       g.self?.FFmpeg || g.self?.FFmpegWASM ||
+                       (g as any)['@ffmpeg/ffmpeg'] || (w as any)['@ffmpeg/ffmpeg'];
 
-        // Tunggu sebentar untuk memastikan script selesai inisialisasi
-        await new Promise(resolve => setTimeout(resolve, 100));
+          if (!umdNs) {
+            console.warn(`[FFmpeg] UMD script loaded but no FFmpeg namespace found. Available globals:`, 
+              Object.keys(g).filter(k => k.toLowerCase().includes('ffmpeg')));
+            continue; // Coba path berikutnya
+          }
 
-        // Check global again dengan berbagai kemungkinan
-        ffmpegGlobal = checkGlobal();
-
-        const createFFmpegFn = ffmpegGlobal?.createFFmpeg;
-        const fetchFileFn = ffmpegGlobal?.fetchFile;
-
-        if (!createFFmpegFn || !fetchFileFn) {
-          const w = window as unknown as { createFFmpeg?: FF['createFFmpeg']; fetchFile?: FF['fetchFile'] };
-          const altCreate = w.createFFmpeg;
-          const altFetch = w.fetchFile;
-
-          if (altCreate && altFetch) {
-            this.ffmpegLoaderCache = {
-              createFFmpegFn: altCreate,
-              fetchFileFn: altFetch
-            };
+          // Bentuk 1: API standar @ffmpeg/ffmpeg UMD (old API)
+          const umdCreateStd = umdNs.createFFmpeg || umdNs.default?.createFFmpeg;
+          const umdFetchStd = umdNs.fetchFile || umdNs.default?.fetchFile;
+          if (umdCreateStd && umdFetchStd) {
+            console.log('[FFmpeg] Found FFmpeg via UMD (old API)');
+            this.ffmpegLoaderCache = { createFFmpegFn: umdCreateStd, fetchFileFn: umdFetchStd };
             return this.ffmpegLoaderCache;
           }
 
-          try {
-            const mod = (await import('@ffmpeg/ffmpeg')) as unknown as FF;
-            const esmCreate = mod.createFFmpeg || mod.default?.createFFmpeg;
-            const esmFetch = mod.fetchFile || mod.default?.fetchFile;
-            if (esmCreate && esmFetch) {
-              this.ffmpegLoaderCache = { createFFmpegFn: esmCreate, fetchFileFn: esmFetch };
-              return this.ffmpegLoaderCache;
-            }
-          } catch (esmErr) {
-            console.error('[FFmpeg] ESM import (browser) failed:', esmErr);
+          // Bentuk 2: UMD dengan FFmpeg class (new API)
+          const FFmpegClass = umdNs.FFmpeg || umdNs.default?.FFmpeg || umdNs.default || umdNs;
+          if (FFmpegClass && typeof FFmpegClass === 'function') {
+            console.log('[FFmpeg] Found FFmpeg class via UMD (new API), creating adapter');
+            const createFFmpegCompat = (opts: { log: boolean; corePath?: string }) => {
+              const instance = new FFmpegClass();
+              // Pastikan menggunakan path lokal untuk menghindari CSP issues
+              const getLocalPath = (relativePath: string): string => {
+                if (typeof window !== 'undefined') {
+                  return new URL(relativePath, window.location.origin).href;
+                }
+                return relativePath;
+              };
+              
+              const corePath = opts.corePath || '/ffmpeg/ffmpeg-core.js';
+              const coreJsPath = getLocalPath(corePath);
+              const coreWasmPath = getLocalPath(corePath.replace('.js', '.wasm'));
+              
+              // Adapt new API to old API
+              return {
+                load: async () => {
+                  // New API: load dengan config menggunakan path lokal
+                  if (instance.load && typeof instance.load === 'function') {
+                    console.log('[FFmpeg UMD] Loading with config - coreURL:', coreJsPath, 'wasmURL:', coreWasmPath);
+                    try {
+                      // coreURL untuk JS file, wasmURL untuk WASM file
+                      const loadConfig: {
+                        coreURL?: string;
+                        wasmURL?: string;
+                        classWorkerURL?: string;
+                        mainScriptUrlOrBlob?: string;
+                      } = {
+                        coreURL: coreJsPath,
+                        wasmURL: coreWasmPath,
+                      };
+                      
+                      await instance.load(loadConfig);
+                      console.log('[FFmpeg UMD] Loaded successfully with config');
+                    } catch (loadErr) {
+                      // Coba tanpa config jika gagal
+                      console.warn('[FFmpeg UMD] Load with config failed, trying without config:', loadErr);
+                      try {
+                        await instance.load();
+                        console.log('[FFmpeg UMD] Loaded successfully without config');
+                      } catch (fallbackErr) {
+                        console.error('[FFmpeg UMD] Load without config also failed:', fallbackErr);
+                        throw new Error(`FFmpeg load failed: ${fallbackErr instanceof Error ? fallbackErr.message : 'Unknown error'}`);
+                      }
+                    }
+                  } else if ((instance as any).init) {
+                    await (instance as any).init();
+                  } else {
+                    throw new Error('FFmpeg instance does not have load or init method');
+                  }
+                },
+                FS: (op: string, path: string, data?: Uint8Array) => {
+                  if (op === 'writeFile') {
+                    if (instance.writeFile && typeof instance.writeFile === 'function') {
+                      return instance.writeFile(path, data!);
+                    }
+                    // Fallback ke FS API
+                    if ((instance as any).FS && typeof (instance as any).FS === 'function') {
+                      return (instance as any).FS(op, path, data);
+                    }
+                    throw new Error('FFmpeg instance does not have writeFile or FS method');
+                  }
+                  if (op === 'readFile') {
+                    if (instance.readFile && typeof instance.readFile === 'function') {
+                      return instance.readFile(path);
+                    }
+                    // Fallback ke FS API
+                    if ((instance as any).FS && typeof (instance as any).FS === 'function') {
+                      return (instance as any).FS(op, path);
+                    }
+                    throw new Error('FFmpeg instance does not have readFile or FS method');
+                  }
+                  // Untuk operasi FS lainnya
+                  if ((instance as any).FS && typeof (instance as any).FS === 'function') {
+                    return (instance as any).FS(op, path, data);
+                  }
+                  throw new Error(`FFmpeg instance does not support FS operation: ${op}`);
+                },
+                run: async (...args: string[]) => {
+                  if (instance.exec && typeof instance.exec === 'function') {
+                    await instance.exec(args);
+                  } else if ((instance as any).run && typeof (instance as any).run === 'function') {
+                    await (instance as any).run(...args);
+                  } else {
+                    throw new Error('FFmpeg instance does not have exec or run method');
+                  }
+                }
+              };
+            };
+
+            const fetchFileCompat = async (input: Blob | File | string): Promise<Uint8Array> => {
+              if (typeof input === 'string') {
+                const response = await fetch(input);
+                return new Uint8Array(await response.arrayBuffer());
+              }
+              return new Uint8Array(await input.arrayBuffer());
+            };
+
+            this.ffmpegLoaderCache = { createFFmpegFn: createFFmpegCompat, fetchFileFn: fetchFileCompat };
+            return this.ffmpegLoaderCache;
           }
 
-          throw new Error('FFmpeg UMD loaded but functions not found in global scope');
+          console.warn(`[FFmpeg] UMD loaded from ${umdPath} but FFmpeg API not found in expected format`);
+        } catch (umdErr) {
+          console.warn(`[FFmpeg] Failed to load UMD from ${umdPath}:`, umdErr);
+          // Lanjutkan ke path berikutnya
+          continue;
         }
-
-        this.ffmpegLoaderCache = { createFFmpegFn, fetchFileFn };
-        return this.ffmpegLoaderCache;
-      } catch (err) {
-        console.error('[FFmpeg] UMD loading failed:', err);
-        throw new Error(`Failed to load FFmpeg: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
+      
+      // Strategy 3: Coba akses langsung dari global scope (mungkin sudah di-load oleh bundler)
+      try {
+        const g = globalThis as any;
+        const w = window as any;
+        const possibleFFmpeg = g['@ffmpeg/ffmpeg'] || w['@ffmpeg/ffmpeg'] || 
+                               g.FFmpeg || w.FFmpeg ||
+                               (g as any).createFFmpeg || (w as any).createFFmpeg;
+        
+        if (possibleFFmpeg) {
+          const createFFmpegFn = typeof possibleFFmpeg === 'function' 
+            ? possibleFFmpeg 
+            : possibleFFmpeg.createFFmpeg || possibleFFmpeg.default?.createFFmpeg;
+          const fetchFileFn = possibleFFmpeg.fetchFile || possibleFFmpeg.default?.fetchFile || 
+            (async (input: Blob | File | string): Promise<Uint8Array> => {
+              if (typeof input === 'string') {
+                const response = await fetch(input);
+                return new Uint8Array(await response.arrayBuffer());
+              }
+              return new Uint8Array(await input.arrayBuffer());
+            });
+          
+          if (createFFmpegFn) {
+            this.ffmpegLoaderCache = { 
+              createFFmpegFn, 
+              fetchFileFn: fetchFileFn as (input: Blob | File | string) => Promise<Uint8Array> | Uint8Array 
+            };
+            return this.ffmpegLoaderCache;
+          }
+        }
+      } catch (globalErr) {
+        console.warn('[FFmpeg] Global scope access failed:', globalErr);
+      }
+      
+      // Jika semua strategi gagal, throw error dengan pesan yang lebih informatif
+      throw new Error('FFmpeg not available: semua strategi loading gagal. Pastikan @ffmpeg/ffmpeg terinstall dan tersedia di browser. Error detail ada di console.');
     }
 
-    // Server-side: try ESM import
+    // Server-side: gunakan dynamic import
     try {
       const mod = (await import('@ffmpeg/ffmpeg')) as unknown as FF;
       const createFFmpegFn = mod.createFFmpeg || mod.default?.createFFmpeg;
@@ -2464,7 +2858,7 @@ export class AudioEngine {
         return this.ffmpegLoaderCache;
       }
     } catch (err) {
-      console.error('[FFmpeg] ESM import failed:', err);
+      console.error('[FFmpeg] Server-side ESM import failed:', err);
     }
 
     throw new Error('FFmpeg not available in this environment');
@@ -2474,12 +2868,56 @@ export class AudioEngine {
    * Memuat script eksternal ke halaman dan menunggu onload.
    */
   private async loadScript(src: string): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
+    // Cek apakah script sudah dimuat
+    const existingScripts = Array.from(document.querySelectorAll('script[src]'));
+    const alreadyLoaded = existingScripts.some(s => {
+      const scriptSrc = (s as HTMLScriptElement).src;
+      return scriptSrc.includes('ffmpeg') && (scriptSrc === src || scriptSrc.endsWith(new URL(src, window.location.origin).pathname));
+    });
+    
+    if (alreadyLoaded) {
+      console.log(`[FFmpeg] Script already loaded: ${src}`);
+      // Tunggu sebentar agar script selesai dieksekusi
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return;
+    }
+
+    return new Promise<void>((resolve, reject) => {
       const s = document.createElement('script');
-      s.src = src;
-      s.async = true;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+      // Gunakan path relatif jika src adalah path relatif
+      const scriptSrc = src.startsWith('http') ? src : new URL(src, window.location.origin).href;
+      s.src = scriptSrc;
+      s.async = false; // Load synchronously untuk memastikan urutan
+      s.crossOrigin = 'anonymous';
+      
+      let resolved = false;
+      
+      s.onload = () => {
+        // Tunggu sebentar agar script selesai dieksekusi
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            resolve();
+          }
+        }, 200);
+      };
+      
+      s.onerror = (err) => {
+        if (!resolved) {
+          resolved = true;
+          reject(new Error(`Failed to load script: ${src}. Error: ${err}`));
+        }
+      };
+      
+      // Timeout fallback
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          console.warn(`[FFmpeg] Script load timeout for ${src}, assuming loaded`);
+          resolve();
+        }
+      }, 5000);
+      
       document.head.appendChild(s);
     });
   }

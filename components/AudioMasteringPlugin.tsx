@@ -786,14 +786,15 @@ export function AudioMasteringPlugin() {
       const baseName = audioFileName 
         ? audioFileName.replace(/\.[^/.]+$/, '')
         : 'mastered';
-      link.download = `${baseName}_mastered${qualitySuffix}.${format}`;
+      const ext = (format === 'wav' || blob.type === 'audio/wav') ? 'wav' : format;
+      link.download = `${baseName}_mastered${qualitySuffix}.${ext}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      const qualityLabel = format === 'mp3' ? (quality === '128k' ? '128 kbps' : '320 kbps') : format === 'flac' ? 'lossless' : quality === 'wav_24_192' ? '192kHz 24-bit' : quality === 'wav_24_96' ? '96kHz 24-bit' : quality;
-      showToast(`Export successful! Audio exported as ${format.toUpperCase()}${qualityLabel ? ` (${qualityLabel})` : ''}.`, 'success');
+      const qualityLabel = ext === 'mp3' ? (quality === '128k' ? '128 kbps' : '320 kbps') : ext === 'flac' ? 'lossless' : quality === 'wav_24_192' ? '192kHz 24-bit' : quality === 'wav_24_96' ? '96kHz 24-bit' : quality;
+      showToast(`Export successful! Audio exported as ${ext.toUpperCase()}${qualityLabel ? ` (${qualityLabel})` : ''}.`, 'success');
     } catch (err) {
       console.error('Export failed:', err);
       Sentry.captureException(err, {
