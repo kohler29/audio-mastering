@@ -912,6 +912,7 @@ export class AudioEngine {
     this.currentTime = 0;
     this.stopTimeUpdate();
     this.stopGainReductionTracking();
+    this.resetLoudnessMeter();
     if (this.onTimeUpdate) {
       this.onTimeUpdate(0);
     }

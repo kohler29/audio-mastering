@@ -1383,7 +1383,7 @@ export function AudioMasteringPlugin() {
           </div>
 
           {/* Loudness Meter */}
-          <LoudnessMeter analysisData={analysisData} />
+          <LoudnessMeter analysisData={analysisData} isPlaying={isPlaying} />
 
           {/* Multiband Compressor */}
           <div className={`bg-zinc-800/50 rounded-xl p-4 border ${multibandEnabled ? 'border-zinc-700' : 'border-zinc-800 opacity-60'}`}>

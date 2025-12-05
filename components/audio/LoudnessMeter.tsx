@@ -6,11 +6,18 @@ import { AudioAnalysisData } from '@/lib/audio/audioEngine';
 
 interface LoudnessMeterProps {
   analysisData: AudioAnalysisData | null;
+  isPlaying: boolean;
 }
 
-export function LoudnessMeter({ analysisData }: LoudnessMeterProps) {
+/**
+ * LoudnessMeter
+ * Menampilkan meter loudness dengan pembaruan real-time untuk Momentary, Short-term,
+ * Integrated, LRA, dan True Peak. Menggunakan canvas untuk batang dan angka untuk display periodik.
+ */
+export function LoudnessMeter({ analysisData, isPlaying }: LoudnessMeterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
+  const frameCountRef = useRef<number>(0);
   
   // Loudness values using refs to avoid re-render loops
   const integratedRef = useRef(-14.5);
@@ -26,7 +33,6 @@ export function LoudnessMeter({ analysisData }: LoudnessMeterProps) {
   const [truePeak, setTruePeak] = useState(-1.2);
   const [lra, setLra] = useState(6.5);
 
-  // Update from analysis data
   useEffect(() => {
     if (analysisData && analysisData.loudness) {
       const loudness = analysisData.loudness;
@@ -39,6 +45,21 @@ export function LoudnessMeter({ analysisData }: LoudnessMeterProps) {
       lraRef.current = loudness.lra;
     }
   }, [analysisData]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      momentaryRef.current = -23;
+      shortTermRef.current = -23;
+      integratedRef.current = -23;
+      lraRef.current = 0;
+      truePeakRef.current = -60;
+      setMomentary(momentaryRef.current);
+      setShortTerm(shortTermRef.current);
+      setIntegrated(integratedRef.current);
+      setTruePeak(truePeakRef.current);
+      setLra(lraRef.current);
+    }
+  }, [isPlaying]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -191,8 +212,9 @@ export function LoudnessMeter({ analysisData }: LoudnessMeterProps) {
       ctx.font = 'bold 10px monospace';
       ctx.fillText('LUFS', width - 35, meterY - 5);
 
-      // Update display values occasionally (every ~10 frames to reduce re-renders)
-      if (animationRef.current && animationRef.current % 10 === 0) {
+      // Update angka setiap beberapa frame untuk mengurangi re-render
+      frameCountRef.current += 1;
+      if (frameCountRef.current % 10 === 0) {
         setMomentary(momentaryRef.current);
         setShortTerm(shortTermRef.current);
         setIntegrated(integratedRef.current);
