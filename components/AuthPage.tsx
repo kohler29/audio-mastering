@@ -295,9 +295,9 @@ export function AuthPage() {
                   />
                   <span>Saya telah membaca dan menyetujui Terms of Service dan Privacy Policy.</span>
                 </label>
-                {(!viewedTerms || !viewedPrivacy) && (
+                {/* {(!viewedTerms || !viewedPrivacy) && (
                   <div className="text-xs text-yellow-400">Buka tautan Terms dan Privacy terlebih dahulu.</div>
-                )}
+                )} */}
               </div>
             )}
 
