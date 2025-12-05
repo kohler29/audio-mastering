@@ -3,8 +3,13 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, User, Eye, EyeOff, Waves, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 
+/**
+ * AuthPage
+ * Form Login/Sign Up dengan persyaratan persetujuan Terms of Service & Privacy Policy.
+ */
 export function AuthPage() {
   const { login, register, isSubmitting, error: authError } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
@@ -13,7 +18,13 @@ export function AuthPage() {
   const [username, setUsername] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [viewedTerms, setViewedTerms] = useState(false);
+  const [viewedPrivacy, setViewedPrivacy] = useState(false);
 
+  /**
+   * Menangani submit form login/signup dan memvalidasi persetujuan saat Sign Up.
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -22,6 +33,10 @@ export function AuthPage() {
       if (isLogin) {
         await login(email, password);
       } else {
+        if (!(consentChecked && viewedTerms && viewedPrivacy)) {
+          setError('Silakan baca Terms & Privacy lalu centang persetujuan');
+          return;
+        }
         if (!username.trim()) {
           setError('Username harus diisi');
           return;
@@ -33,12 +48,18 @@ export function AuthPage() {
     }
   };
 
+  /**
+   * Ganti mode Login/Sign Up dan reset state terkait consent.
+   */
   const switchMode = () => {
     setIsLogin(!isLogin);
     setEmail('');
     setPassword('');
     setUsername('');
     setError(null);
+    setConsentChecked(false);
+    setViewedTerms(false);
+    setViewedPrivacy(false);
   };
 
   return (
@@ -252,15 +273,39 @@ export function AuthPage() {
                     className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm"
                   >
                     <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{error || authError}</span>
-                  </motion.div>
-                )}
+                <span>{error || authError}</span>
+              </motion.div>
+            )}
 
-                {/* Forgot Password (Login only) */}
-                {isLogin && (
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
+            {/* Consent (Sign Up only) */}
+            {!isLogin && (
+              <div className="space-y-2">
+                <div className="text-sm text-zinc-400">
+                  Harap buka dan baca{' '}
+                  <Link href="/terms" target="_blank" className="text-cyan-400 hover:text-cyan-300" onClick={() => setViewedTerms(true)}>Terms of Service</Link>
+                  {' '}serta{' '}
+                  <Link href="/privacy" target="_blank" className="text-cyan-400 hover:text-cyan-300" onClick={() => setViewedPrivacy(true)}>Privacy Policy</Link>.
+                </div>
+                <label className="flex items-start gap-3 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={consentChecked}
+                    onChange={(e) => setConsentChecked(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>Saya telah membaca dan menyetujui Terms of Service dan Privacy Policy.</span>
+                </label>
+                {(!viewedTerms || !viewedPrivacy) && (
+                  <div className="text-xs text-yellow-400">Buka tautan Terms dan Privacy terlebih dahulu.</div>
+                )}
+              </div>
+            )}
+
+            {/* Forgot Password (Login only) */}
+            {isLogin && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
                       className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
                     >
                       Forgot password?
@@ -269,13 +314,13 @@ export function AuthPage() {
                 )}
 
                 {/* Submit Button */}
-                <motion.button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full bg-linear-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white py-3 rounded-xl shadow-lg shadow-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
+            <motion.button
+              type="submit"
+              disabled={isSubmitting || (!isLogin && !(consentChecked && viewedTerms && viewedPrivacy))}
+              className="w-full bg-linear-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white py-3 rounded-xl shadow-lg shadow-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
                   {isSubmitting ? (
                     <span className="flex items-center justify-center gap-2">
                       <motion.div
@@ -319,7 +364,12 @@ export function AuthPage() {
             <div>
               <motion.button
                 type="button"
-                onClick={() => {
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  if (!isLogin && !(consentChecked && viewedTerms && viewedPrivacy)) {
+                    e.preventDefault();
+                    setError('Silakan baca Terms & Privacy lalu centang persetujuan');
+                    return;
+                  }
                   window.location.href = '/api/auth/google/authorize';
                 }}
                 className="w-full flex items-center justify-center gap-2 py-3 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-zinc-300 text-sm transition-colors"
@@ -346,16 +396,11 @@ export function AuthPage() {
           transition={{ delay: 0.5 }}
         >
           By continuing, you agree to our{' '}
-          <button className="text-cyan-400 hover:text-cyan-300 transition-colors">
-            Terms of Service
-          </button>
+          <Link href="/terms" className="text-cyan-400 hover:text-cyan-300 transition-colors" target="_blank" onClick={() => setViewedTerms(true)}>Terms of Service</Link>
           {' '}and{' '}
-          <button className="text-cyan-400 hover:text-cyan-300 transition-colors">
-            Privacy Policy
-          </button>
+          <Link href="/privacy" className="text-cyan-400 hover:text-cyan-300 transition-colors" target="_blank" onClick={() => setViewedPrivacy(true)}>Privacy Policy</Link>
         </motion.p>
       </div>
     </div>
   );
 }
-
