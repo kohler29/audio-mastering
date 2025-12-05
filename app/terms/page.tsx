@@ -1,18 +1,31 @@
 "use client";
 
-import { BookOpen } from 'lucide-react';
+import { BookOpen, ArrowLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 /**
  * TermsPage
  * Halaman Terms of Service dengan konten statis (hardcode) yang mudah dibaca.
  */
 export default function TermsPage() {
+  const router = useRouter();
   return (
     <div className="min-h-screen bg-zinc-950">
       <div className="max-w-4xl mx-auto px-6 py-10">
-        <div className="flex items-center gap-3 mb-6">
-          <BookOpen className="w-5 h-5 text-cyan-400" />
-          <h1 className="text-2xl text-white">Terms of Service</h1>
+        <div className="flex items-center justify-between mb-6">
+          <button
+            aria-label="Back"
+            onClick={() => router.back()}
+            className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+            title="Kembali"
+          >
+            <ArrowLeft className="w-5 h-5 text-zinc-400" />
+          </button>
+          <div className="flex items-center gap-3">
+            <BookOpen className="w-5 h-5 text-cyan-400" />
+            <h1 className="text-2xl text-white">Terms of Service</h1>
+          </div>
+          <div className="w-9" />
         </div>
 
         <div className="space-y-6 text-zinc-300">
