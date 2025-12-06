@@ -1,6 +1,8 @@
 /**
- * API client utility with CSRF token support
+ * API client utility with CSRF token support and retry logic
  */
+
+import { fetchWithRetry } from './utils/retry';
 
 let csrfTokenCache: string | null = null;
 let csrfTokenPromise: Promise<string> | null = null;
@@ -19,10 +21,16 @@ async function getCSRFToken(): Promise<string | null> {
     return csrfTokenPromise;
   }
 
-  // Fetch new token
+  // Fetch new token dengan retry logic
   csrfTokenPromise = (async () => {
     try {
-      const res = await fetch('/api/csrf-token');
+      const res = await fetchWithRetry('/api/csrf-token', {
+        method: 'GET',
+      }, {
+        maxRetries: 2,
+        initialDelay: 500,
+        maxDelay: 2000,
+      });
       if (!res.ok) {
         console.warn('Failed to get CSRF token');
         return null;
@@ -50,11 +58,12 @@ export function clearCSRFTokenCache(): void {
 }
 
 /**
- * Fetch with CSRF token support
+ * Fetch with CSRF token support and retry logic
  */
 export async function fetchWithCSRF(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryOptions?: { maxRetries?: number; initialDelay?: number; maxDelay?: number }
 ): Promise<Response> {
   // Only add CSRF token for state-changing methods
   const method = options.method?.toUpperCase();
@@ -68,6 +77,18 @@ export async function fetchWithCSRF(
       headers.set('X-CSRF-Token', token);
       options.headers = headers;
     }
+  }
+
+  // Gunakan retry logic untuk request yang penting
+  // Default: retry untuk POST, PATCH, PUT, DELETE (state-changing operations)
+  const shouldRetry = needsCSRF || retryOptions !== undefined;
+  
+  if (shouldRetry) {
+    return fetchWithRetry(url, options, {
+      maxRetries: retryOptions?.maxRetries ?? 3,
+      initialDelay: retryOptions?.initialDelay ?? 1000,
+      maxDelay: retryOptions?.maxDelay ?? 10000,
+    });
   }
 
   return fetch(url, options);

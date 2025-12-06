@@ -1,6 +1,7 @@
 import useSWR from 'swr';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { fetchWithCSRF, clearCSRFTokenCache } from '@/lib/apiClient';
+import { fetchWithRetry } from '@/lib/utils/retry';
 
 interface User {
   id: string;
@@ -16,19 +17,37 @@ interface AuthResponse {
 }
 
 const fetcher = async (url: string): Promise<{ user: User } | null> => {
-  const res = await fetch(url);
-  if (!res.ok) {
-    // 401 adalah kondisi normal ketika user belum login, bukan error
-    if (res.status === 401) {
+  // Gunakan retry logic untuk fetch auth, tapi jangan retry untuk 401 (unauthorized)
+  try {
+    const res = await fetchWithRetry(url, {
+      method: 'GET',
+    }, {
+      maxRetries: 2,
+      initialDelay: 500,
+      maxDelay: 2000,
+      retryableStatuses: [500, 502, 503, 504], // Jangan retry untuk 401
+    });
+    
+    if (!res.ok) {
+      // 401 adalah kondisi normal ketika user belum login, bukan error
+      if (res.status === 401) {
+        return null;
+      }
+      // Untuk error lainnya, tetap throw error
+      const error = await res.json();
+      throw new Error(error.error || 'Terjadi kesalahan');
+    }
+    
+    const data: AuthResponse = await res.json();
+    // Konversi AuthResponse ke format yang diharapkan useSWR
+    return data.user ? { user: data.user } : null;
+  } catch (error) {
+    // Jika error adalah 401, return null (user belum login)
+    if (error instanceof Response && error.status === 401) {
       return null;
     }
-    // Untuk error lainnya, tetap throw error
-    const error = await res.json();
-    throw new Error(error.error || 'Terjadi kesalahan');
+    throw error;
   }
-  const data: AuthResponse = await res.json();
-  // Konversi AuthResponse ke format yang diharapkan useSWR
-  return data.user ? { user: data.user } : null;
 };
 
 export function useAuth() {
@@ -38,6 +57,9 @@ export function useAuth() {
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: true,
+      dedupingInterval: 2000, // Prevent duplicate requests within 2 seconds
+      errorRetryCount: 2,
+      errorRetryInterval: 1000,
     }
   );
 
@@ -52,6 +74,10 @@ export function useAuth() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
+      }, {
+        maxRetries: 2,
+        initialDelay: 500,
+        maxDelay: 2000,
       });
 
       const data = await res.json();
@@ -79,6 +105,10 @@ export function useAuth() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, username, password }),
+      }, {
+        maxRetries: 2,
+        initialDelay: 500,
+        maxDelay: 2000,
       });
 
       const data = await res.json();
@@ -97,6 +127,10 @@ export function useAuth() {
     try {
       await fetchWithCSRF('/api/auth/logout', {
         method: 'POST',
+      }, {
+        maxRetries: 1, // Hanya 1 retry untuk logout
+        initialDelay: 500,
+        maxDelay: 1000,
       });
       clearCSRFTokenCache();
       await mutate(undefined, false);

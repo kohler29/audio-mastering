@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-import { sanitizePresetName, sanitizeFolderName } from '@/lib/validation';
+import { sanitizePresetName, sanitizeFolderName, sanitizeGenreName } from '@/lib/validation';
 import { verifyCSRFToken } from '@/lib/csrf';
 
 /**
@@ -126,11 +126,12 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, settings, isPublic, folder } = body;
+    const { name, settings, isPublic, folder, genre } = body;
 
     // Sanitize input
     const sanitizedName = name ? sanitizePresetName(name) : null;
     const sanitizedFolder = folder !== undefined ? sanitizeFolderName(folder) : undefined;
+    const sanitizedGenre = genre !== undefined ? sanitizeGenreName(genre) : undefined;
 
     // Validasi settings jika diberikan
     if (settings !== undefined) {
@@ -170,6 +171,7 @@ export async function PATCH(
         ...(settings && { settings }),
         ...(typeof isPublic === 'boolean' && { isPublic }),
         ...(sanitizedFolder !== undefined && { folder: sanitizedFolder }),
+        ...(sanitizedGenre !== undefined && { genre: sanitizedGenre }),
       },
       include: {
         user: {

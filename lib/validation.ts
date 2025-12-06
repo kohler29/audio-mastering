@@ -158,6 +158,30 @@ export function sanitizeFolderName(folder: string | null | undefined): string | 
 }
 
 /**
+ * Sanitize genre name
+ * Similar to folder name sanitization
+ */
+export function sanitizeGenreName(genre: string | null | undefined): string | null {
+  if (!genre || typeof genre !== 'string') {
+    return null;
+  }
+  
+  let sanitized = genre.trim();
+  
+  // Limit length
+  sanitized = sanitized.slice(0, 50);
+  
+  // Remove any null bytes or control characters
+  sanitized = sanitized.replace(/[\x00-\x1F\x7F]/g, '');
+  
+  // Remove any path traversal attempts
+  sanitized = sanitized.replace(/\.\./g, '');
+  sanitized = sanitized.replace(/[\/\\]/g, '');
+  
+  return sanitized || null;
+}
+
+/**
  * Generate safe username from email or name
  */
 export function generateSafeUsername(input: string): string {

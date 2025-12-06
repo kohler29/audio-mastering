@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import * as Sentry from '@sentry/nextjs';
-import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X, Edit, Trash2, Folder, ChevronUp, ChevronDown, Users } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Bell, Save, Upload, Download, LogOut, X, Edit, Trash2, Folder, ChevronUp, ChevronDown, Users, Settings, Music } from 'lucide-react';
 import { Waveform } from './audio/Waveform';
 import { SpectrumAnalyzer } from './audio/SpectrumAnalyzer';
 import { Knob } from './audio/Knob';
@@ -18,6 +18,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { AudioEngineSettings } from '@/lib/audio/audioEngine';
 import { effectPresets, calculateLimiterGainReduction } from '@/lib/audio/audioEffects';
 import { ToastContainer, type Toast } from '@/components/ui/Toast';
+import { PresetManagementModal } from './preset/PresetManagementModal';
+import { getNextPreset, getPreviousPreset } from '@/lib/utils/presetUtils';
 
 
 interface DisclaimerModalProps {
@@ -66,6 +68,7 @@ export function AudioMasteringPlugin() {
   const DISCLAIMER_TITLE = process.env.NEXT_PUBLIC_DISCLAIMER_TITLE || 'Pernyataan Privasi & Keamanan Data';
   const DISCLAIMER_ACCEPT_LABEL = process.env.NEXT_PUBLIC_DISCLAIMER_ACCEPT_LABEL || 'Saya Mengerti';
   const DISCLAIMER_CLOSE_LABEL = process.env.NEXT_PUBLIC_DISCLAIMER_CLOSE_LABEL || 'Tutup';
+  const BUILTIN_FOLDER_NAME = process.env.NEXT_PUBLIC_BUILTIN_FOLDER_NAME || 'Master Pro';
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   // Default fade dibuat 0 ms agar user bisa menentukan sendiri
   const DEFAULT_FADE_MS = Number(process.env.NEXT_PUBLIC_FADE_DURATION_MS ?? 0) || 0;
@@ -96,7 +99,7 @@ export function AudioMasteringPlugin() {
     getMasterBypassState,
   } = useAudioEngine();
 
-  const { savePreset, presets: dbPresets, isLoading: presetsLoading, loadPreset, updatePreset, deletePreset, refreshPresets } = usePresets();
+  const { savePreset, presets: dbPresets, isLoading: presetsLoading, loadPreset, updatePreset, deletePreset, refreshPresets, presetNameExists } = usePresets();
   const { user, logout } = useAuth();
 
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -106,17 +109,41 @@ export function AudioMasteringPlugin() {
   const [showEditPresetModal, setShowEditPresetModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
+  const [showPresetManagementModal, setShowPresetManagementModal] = useState(false);
   const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null);
   const [deletingPresetName, setDeletingPresetName] = useState<string>('');
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [presetName, setPresetName] = useState('');
   const [presetFolder, setPresetFolder] = useState<string>('');
+  const [presetGenre, setPresetGenre] = useState<string>('');
   const [isShowingOriginal, setIsShowingOriginal] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
   const [presetIsPublic, setPresetIsPublic] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [leftWaveformData, setLeftWaveformData] = useState<Float32Array | null>(null);
   const [rightWaveformData, setRightWaveformData] = useState<Float32Array | null>(null);
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [isMasterProCollapsed, setIsMasterProCollapsed] = useState(false);
+
+  /**
+   * Mengambil daftar kategori preset dari env untuk quick-select
+   */
+  const getSuggestedCategories = (): string[] => {
+    const raw = process.env.NEXT_PUBLIC_PRESET_CATEGORIES || '';
+    return raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+  };
+  const suggestedCategories = getSuggestedCategories();
+
+  /**
+   * Menghasilkan optgroup untuk preset built-in dengan dukungan collapse
+   */
+  const renderBuiltInPresetOptgroup = () => (
+    <optgroup label={`📁 ${BUILTIN_FOLDER_NAME}`}>
+      {!isMasterProCollapsed && presetNames.map(p => (
+        <option key={p} value={p.toLowerCase()}>{p}</option>
+      ))}
+    </optgroup>
+  );
   const [dragActive, setDragActive] = useState(false);
   
   // Control states
@@ -624,6 +651,32 @@ export function AudioMasteringPlugin() {
     handlePresetChange(allPresets[newIndex].value);
   }, [selectedPresetId, selectedPreset, getAllPresets, handlePresetChange]);
 
+  // Keyboard shortcuts untuk navigasi preset (Arrow Up/Down)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip jika user sedang mengetik di input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      // Arrow Up: preset sebelumnya
+      if (e.key === 'ArrowUp' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        handlePresetNavigate('prev');
+      }
+      
+      // Arrow Down: preset berikutnya
+      if (e.key === 'ArrowDown' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        handlePresetNavigate('next');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handlePresetNavigate]);
+
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
@@ -633,18 +686,26 @@ export function AudioMasteringPlugin() {
       showToast('Masukkan nama preset', 'error');
       return;
     }
+    const targetFolder = presetFolder.trim() || null;
+    if (presetNameExists(presetName.trim(), targetFolder)) {
+      showToast('Nama preset sudah ada di folder ini', 'error');
+      return;
+    }
 
     try {
+      setIsSavingPreset(true);
       const settings = getCurrentSettings();
       await savePreset({
         name: presetName,
         settings,
         isPublic: presetIsPublic,
-        folder: presetFolder.trim() || null,
+        folder: targetFolder,
+        genre: presetGenre.trim() || null,
       });
       setShowSavePresetModal(false);
       setPresetName('');
       setPresetFolder('');
+      setPresetGenre('');
       setPresetIsPublic(false);
       await refreshPresets();
       showToast(`Preset "${presetName}" berhasil disimpan!`, 'success');
@@ -655,6 +716,8 @@ export function AudioMasteringPlugin() {
         extra: { presetName, isPublic: presetIsPublic, folder: presetFolder },
       });
       showToast(err instanceof Error ? err.message : 'Gagal menyimpan preset', 'error');
+    } finally {
+      setIsSavingPreset(false);
     }
   };
 
@@ -667,6 +730,7 @@ export function AudioMasteringPlugin() {
     setEditingPresetId(presetId);
     setPresetName(preset.name);
     setPresetFolder(preset.folder || '');
+    setPresetGenre(preset.genre || '');
     setPresetIsPublic(preset.isPublic);
     setShowEditPresetModal(true);
   };
@@ -684,11 +748,13 @@ export function AudioMasteringPlugin() {
         settings,
         isPublic: presetIsPublic,
         folder: presetFolder.trim() || null,
+        genre: presetGenre.trim() || null,
       });
       setShowEditPresetModal(false);
       setEditingPresetId(null);
       setPresetName('');
       setPresetFolder('');
+      setPresetGenre('');
       setPresetIsPublic(false);
       await refreshPresets();
       showToast(`Preset "${presetName}" berhasil diupdate!`, 'success');
@@ -921,17 +987,22 @@ export function AudioMasteringPlugin() {
             >
               <ChevronUp className="w-4 h-4" />
             </button>
+            <button
+              onClick={() => setIsMasterProCollapsed(v => !v)}
+              disabled={presetsLoading}
+              className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-2 py-1.5 rounded-lg border border-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              title={isMasterProCollapsed ? `Tampilkan ${BUILTIN_FOLDER_NAME}` : `Sembunyikan ${BUILTIN_FOLDER_NAME}`}
+            >
+              <Folder className="w-4 h-4" />
+              <span className="text-xs">{isMasterProCollapsed ? 'Show' : 'Hide'}</span>
+            </button>
             <select 
               value={selectedPresetId ? `db-${selectedPresetId}` : selectedPreset}
               onChange={(e) => handlePresetChange(e.target.value)}
               className="bg-zinc-700 text-zinc-100 px-3 md:px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 text-sm min-w-[140px] sm:min-w-[180px] md:min-w-[200px]"
               disabled={presetsLoading}
             >
-              <optgroup label="Built-in Presets">
-                {presetNames.map(p => (
-                  <option key={p} value={p.toLowerCase()}>{p}</option>
-                ))}
-              </optgroup>
+              {renderBuiltInPresetOptgroup()}
               {(() => {
                 const myPresets = dbPresets.filter(p => p.userId === user?.id);
                 const folders = Array.from(new Set(myPresets.map(p => p.folder).filter((f): f is string => f !== null)));
@@ -981,6 +1052,13 @@ export function AudioMasteringPlugin() {
             >
               <ChevronDown className="w-4 h-4" />
             </button>
+            <button
+              onClick={() => setShowPresetManagementModal(true)}
+              className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 p-2 rounded-lg border border-zinc-600 transition-colors"
+              title="Kelola Preset"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
             {selectedPresetId && dbPresets.find(p => p.id === selectedPresetId && p.userId === user?.id) && (
               <div className="flex gap-1">
                 <button
@@ -1008,6 +1086,9 @@ export function AudioMasteringPlugin() {
                 if (currentPresetName) {
                   setPresetName(currentPresetName);
                 }
+              }
+              if (!presetFolder) {
+                setPresetFolder(user?.username || '');
               }
               setShowSavePresetModal(true);
             }}
@@ -1284,34 +1365,6 @@ export function AudioMasteringPlugin() {
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
-                {/* Playback Controls */}
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => handleSeek(0)}
-                    aria-label="Seek to start"
-                    className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={!audioFile || isLoading}
-                  >
-                    <SkipBack className="w-3 h-3" />
-                  </button>
-                  <button 
-                    onClick={handlePlayPause}
-                    aria-label={isPlaying ? 'Pause' : 'Play'}
-                    className="bg-cyan-600 hover:bg-cyan-500 text-white p-1.5 rounded transition-colors disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed"
-                    disabled={!audioFile || isLoading}
-                    title={isPlaying ? 'Pause (Spasi)' : 'Play (Spasi)'}
-                  >
-                    {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-                  </button>
-                  <button 
-                    onClick={handleStop}
-                    aria-label="Stop"
-                    className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={!audioFile || isLoading}
-                  >
-                    <SkipForward className="w-3 h-3" />
-                  </button>
-                </div>
                 {/* Fade Controls */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1">
@@ -1393,6 +1446,73 @@ export function AudioMasteringPlugin() {
               bands={multibandBands}
               onBandsChange={setMultibandBands}
             />
+          </div>
+
+          {/* Playback Controls - Fixed Position (tidak ikut scroll) */}
+          <div className="fixed -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-800/95 rounded-xl p-3 border border-zinc-700 flex items-center justify-center z-50 backdrop-blur-md shadow-2xl">
+            <div className="flex items-center gap-3">
+              {/* Previous Button */}
+              <button 
+                onClick={() => {
+                  if (audioFile && !isLoading) {
+                    const newTime = Math.max(0, currentTime - 5);
+                    seek(newTime);
+                  }
+                }}
+                aria-label="Previous"
+                className="group relative w-12 h-12 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg border border-zinc-700/50 active:scale-95"
+                disabled={!audioFile || isLoading}
+                title="Previous (5 detik)"
+              >
+                <div className="absolute inset-0 rounded-full bg-linear-to-br from-zinc-900/50 to-zinc-800/50"></div>
+                <div className="relative z-10 w-5 h-5 bg-linear-to-br from-emerald-500 via-emerald-400 to-green-400" style={{ 
+                  WebkitMask: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'11 17 6 12 11 7\'/%3E%3Cpolyline points=\'18 17 13 12 18 7\'/%3E%3C/svg%3E") center/contain no-repeat',
+                  mask: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'11 17 6 12 11 7\'/%3E%3Cpolyline points=\'18 17 13 12 18 7\'/%3E%3C/svg%3E") center/contain no-repeat'
+                }}></div>
+              </button>
+              
+              {/* Pause Button */}
+              <button 
+                onClick={handlePlayPause}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+                className="group relative w-12 h-12 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg border border-zinc-700/50 active:scale-95"
+                disabled={!audioFile || isLoading}
+                title={isPlaying ? 'Pause (Spasi)' : 'Play (Spasi)'}
+              >
+                <div className="absolute inset-0 rounded-full bg-linear-to-br from-zinc-900/50 to-zinc-800/50"></div>
+                {isPlaying ? (
+                  <div className="relative z-10 w-5 h-5 bg-linear-to-br from-emerald-500 via-emerald-400 to-green-400" style={{ 
+                    WebkitMask: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Crect x=\'6\' y=\'4\' width=\'4\' height=\'16\'/%3E%3Crect x=\'14\' y=\'4\' width=\'4\' height=\'16\'/%3E%3C/svg%3E") center/contain no-repeat',
+                    mask: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Crect x=\'6\' y=\'4\' width=\'4\' height=\'16\'/%3E%3Crect x=\'14\' y=\'4\' width=\'4\' height=\'16\'/%3E%3C/svg%3E") center/contain no-repeat'
+                  }}></div>
+                ) : (
+                  <div className="relative z-10 w-5 h-5 bg-linear-to-br from-emerald-500 via-emerald-400 to-green-400" style={{ 
+                    WebkitMask: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolygon points=\'5 3 19 12 5 21 5 3\'/%3E%3C/svg%3E") center/contain no-repeat',
+                    mask: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolygon points=\'5 3 19 12 5 21 5 3\'/%3E%3C/svg%3E") center/contain no-repeat'
+                  }}></div>
+                )}
+              </button>
+              
+              {/* Next Button */}
+              <button 
+                onClick={() => {
+                  if (audioFile && !isLoading) {
+                    const newTime = Math.min(duration, currentTime + 5);
+                    seek(newTime);
+                  }
+                }}
+                aria-label="Next"
+                className="group relative w-12 h-12 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg border border-zinc-700/50 active:scale-95"
+                disabled={!audioFile || isLoading}
+                title="Next (5 detik)"
+              >
+                <div className="absolute inset-0 rounded-full bg-linear-to-br from-zinc-900/50 to-zinc-800/50"></div>
+                <div className="relative z-10 w-5 h-5 bg-linear-to-br from-emerald-500 via-emerald-400 to-green-400" style={{ 
+                  WebkitMask: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'13 17 18 12 13 7\'/%3E%3Cpolyline points=\'6 17 11 12 6 7\'/%3E%3C/svg%3E") center/contain no-repeat',
+                  mask: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'13 17 18 12 13 7\'/%3E%3Cpolyline points=\'6 17 11 12 6 7\'/%3E%3C/svg%3E") center/contain no-repeat'
+                }}></div>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1869,55 +1989,104 @@ export function AudioMasteringPlugin() {
                   }
                 }}
               />
+              {(() => {
+                const name = presetName.trim();
+                const folder = presetFolder.trim() || null;
+                const duplicated = name !== '' && presetNameExists(name, folder);
+                if (duplicated) {
+                  return (
+                    <div className="text-red-400 text-xs mt-2">Nama preset sudah ada di folder ini.</div>
+                  );
+                }
+                return null;
+              })()}
             </div>
             <div className="mb-4">
               <label className="text-zinc-300 text-sm flex items-center gap-2 mb-2">
                 <Folder className="w-4 h-4" />
-                Folder (opsional)
+                Folder/Kategori (opsional)
               </label>
-              <div className="flex gap-2">
+              <div>
                 <input
                   type="text"
                   value={presetFolder}
                   onChange={(e) => setPresetFolder(e.target.value)}
                   placeholder="Nama folder (misal: Default, Mastering, dll)"
-                  className="flex-1 bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       handleSavePreset();
                     }
                   }}
                 />
-                {(() => {
-                  // Get existing folders from user's presets
-                  const myPresets = dbPresets.filter(p => p.userId === user?.id);
-                  const existingFolders = Array.from(new Set(myPresets.map(p => p.folder).filter((f): f is string => f !== null)));
-                  existingFolders.sort();
-                  
-                  if (existingFolders.length > 0) {
-                    return (
-                      <select
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            setPresetFolder(e.target.value);
-                          }
-                        }}
-                        className="bg-zinc-700 text-zinc-100 px-3 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 text-sm"
-                        title="Pilih folder yang sudah ada"
-                      >
-                        <option value="">Pilih folder...</option>
-                        {existingFolders.map(folder => (
-                          <option key={folder} value={folder}>{folder}</option>
-                        ))}
-                      </select>
-                    );
-                  }
-                  return null;
-                })()}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                  {(() => {
+                    const myPresets = dbPresets.filter(p => p.userId === user?.id);
+                    const existingFolders = Array.from(new Set(myPresets.map(p => p.folder).filter((f): f is string => f !== null)));
+                    existingFolders.sort();
+                    if (existingFolders.length > 0) {
+                      return (
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              setPresetFolder(e.target.value);
+                            }
+                          }}
+                          className="w-full bg-zinc-700 text-zinc-100 px-3 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 text-sm"
+                          title="Pilih folder yang sudah ada"
+                        >
+                          <option value="">Pilih folder...</option>
+                          {existingFolders.map(folder => (
+                            <option key={folder} value={folder}>{folder}</option>
+                          ))}
+                        </select>
+                      );
+                    }
+                    return null;
+                  })()}
+                  {suggestedCategories.length > 0 && (
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setPresetFolder(e.target.value);
+                        }
+                      }}
+                      className="w-full bg-zinc-700 text-zinc-100 px-3 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 text-sm"
+                      title="Pilih kategori cepat"
+                    >
+                      <option value="">Kategori cepat...</option>
+                      {suggestedCategories.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
               <p className="text-zinc-500 text-xs mt-1">
                 Ketik nama folder baru atau pilih dari folder yang sudah ada. Kosongkan jika tidak ingin menggunakan folder.
+              </p>
+            </div>
+            <div className="mb-4">
+              <label className="text-zinc-300 text-sm flex items-center gap-2 mb-2">
+                <Music className="w-4 h-4" />
+                Genre (opsional)
+              </label>
+              <input
+                type="text"
+                value={presetGenre}
+                onChange={(e) => setPresetGenre(e.target.value)}
+                placeholder="Genre preset (e.g., Rock, Pop, Jazz)"
+                className="w-full bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSavePreset();
+                  }
+                }}
+              />
+              <p className="text-zinc-500 text-xs mt-1">
+                Kosongkan jika tidak ingin menggunakan genre
               </p>
             </div>
             <div className="mb-4">
@@ -1941,15 +2110,17 @@ export function AudioMasteringPlugin() {
             <div className="flex gap-2">
               <button
                 onClick={handleSavePreset}
-                className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg transition-colors"
+                disabled={isSavingPreset || !presetName.trim() || (presetName.trim() !== '' && presetNameExists(presetName.trim(), presetFolder.trim() || null))}
+                className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Simpan
+                {isSavingPreset ? 'Menyimpan...' : 'Simpan'}
               </button>
               <button
                 onClick={() => {
                   setShowSavePresetModal(false);
                   setPresetName('');
                   setPresetFolder('');
+                  setPresetGenre('');
                   setPresetIsPublic(false);
                 }}
                 className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors"
@@ -1984,7 +2155,7 @@ export function AudioMasteringPlugin() {
             <div className="mb-4">
               <label className="text-zinc-300 text-sm flex items-center gap-2 mb-2">
                 <Folder className="w-4 h-4" />
-                Folder (opsional)
+                Folder/Kategori (opsional)
               </label>
               <input
                 type="text"
@@ -1998,8 +2169,48 @@ export function AudioMasteringPlugin() {
                   }
                 }}
               />
+              {suggestedCategories.length > 0 && (
+                <div className="mt-2">
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setPresetFolder(e.target.value);
+                      }
+                    }}
+                    className="bg-zinc-700 text-zinc-100 px-3 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500 text-sm"
+                    title="Pilih kategori cepat"
+                  >
+                    <option value="">Kategori cepat...</option>
+                    {suggestedCategories.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <p className="text-zinc-500 text-xs mt-1">
                 Kosongkan jika tidak ingin menggunakan folder
+              </p>
+            </div>
+            <div className="mb-4">
+              <label className="text-zinc-300 text-sm flex items-center gap-2 mb-2">
+                <Music className="w-4 h-4" />
+                Genre (opsional)
+              </label>
+              <input
+                type="text"
+                value={presetGenre}
+                onChange={(e) => setPresetGenre(e.target.value)}
+                placeholder="Genre preset (e.g., Rock, Pop, Jazz)"
+                className="w-full bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleUpdatePreset();
+                  }
+                }}
+              />
+              <p className="text-zinc-500 text-xs mt-1">
+                Kosongkan jika tidak ingin menggunakan genre
               </p>
             </div>
             <div className="mb-4">
@@ -2033,6 +2244,7 @@ export function AudioMasteringPlugin() {
                   setEditingPresetId(null);
                   setPresetName('');
                   setPresetFolder('');
+                  setPresetGenre('');
                   setPresetIsPublic(false);
                 }}
                 className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors"
@@ -2081,6 +2293,25 @@ export function AudioMasteringPlugin() {
           </div>
         </div>
       )}
+
+      {/* Preset Management Modal */}
+      <PresetManagementModal
+        isOpen={showPresetManagementModal}
+        onClose={() => setShowPresetManagementModal(false)}
+        onSelectPreset={async (preset) => {
+          if (preset.settings) {
+            applyPresetSettings(preset.settings);
+            setSelectedPresetId(preset.id);
+            setSelectedPreset('');
+            showToast(`Loaded preset: ${preset.name}`, 'success');
+            setShowPresetManagementModal(false);
+          }
+        }}
+        onEditPreset={(preset) => {
+          handleEditPreset(preset.id);
+          setShowPresetManagementModal(false);
+        }}
+      />
 
       {/* Disclaimer Modal */}
       <DisclaimerModal

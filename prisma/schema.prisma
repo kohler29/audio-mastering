@@ -29,6 +29,7 @@ model Preset {
   name      String
   userId    String
   folder    String?  // Folder untuk organisasi preset per user
+  genre     String?  // Genre preset (e.g., Rock, Pop, Jazz, etc.)
   isPublic  Boolean  @default(false) // false = private, true = published
   settings  Json     // Store preset settings as JSON
   createdAt DateTime @default(now())
@@ -38,5 +39,6 @@ model Preset {
   @@index([userId])
   @@index([isPublic])
   @@index([userId, folder])
+  @@index([genre])
   @@map("presets")
 }

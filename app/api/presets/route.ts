@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-import { sanitizePresetName, sanitizeFolderName } from '@/lib/validation';
+import { sanitizePresetName, sanitizeFolderName, sanitizeGenreName } from '@/lib/validation';
 import { verifyCSRFToken } from '@/lib/csrf';
+import { Prisma } from '@prisma/client';
 
 /**
  * GET /api/presets
  * Get all presets (user's own presets + published presets from others)
+ * Supports pagination, search, filter, and sorting via query parameters
  */
 export async function GET(request: NextRequest) {
   try {
@@ -28,14 +30,81 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get user's own presets + published presets from others
-    const presets = await prisma.preset.findMany({
-      where: {
+    // Parse query parameters
+    const searchParams = request.nextUrl.searchParams;
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '25', 10)));
+    const searchQuery = searchParams.get('q')?.trim() || '';
+    const folderFilter = searchParams.get('folder') || null;
+    const genreFilter = searchParams.get('genre') || null;
+    const isPublicFilter = searchParams.get('isPublic');
+    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    const sortOrder = searchParams.get('sortOrder') || 'desc';
+
+    // Build where clause
+    const whereConditions: Prisma.PresetWhereInput[] = [
+      {
         OR: [
           { userId: payload.userId }, // User's own presets
           { isPublic: true }, // Published presets from others
         ],
       },
+    ];
+
+    // Add search filter
+    if (searchQuery) {
+      whereConditions.push({
+        OR: [
+          { name: { contains: searchQuery, mode: 'insensitive' } },
+          { folder: { contains: searchQuery, mode: 'insensitive' } },
+          { genre: { contains: searchQuery, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    // Add folder filter
+    if (folderFilter) {
+      whereConditions.push({ folder: folderFilter });
+    }
+
+    // Add genre filter
+    if (genreFilter) {
+      whereConditions.push({ genre: genreFilter });
+    }
+
+    // Add isPublic filter
+    if (isPublicFilter !== null && isPublicFilter !== '') {
+      whereConditions.push({ isPublic: isPublicFilter === 'true' });
+    }
+
+    const where: Prisma.PresetWhereInput = {
+      AND: whereConditions,
+    };
+
+    // Build orderBy
+    let orderBy: Prisma.PresetOrderByWithRelationInput;
+    switch (sortBy) {
+      case 'name':
+        orderBy = { name: sortOrder === 'asc' ? 'asc' : 'desc' };
+        break;
+      case 'folder':
+        orderBy = { folder: sortOrder === 'asc' ? 'asc' : 'desc' };
+        break;
+      case 'genre':
+        orderBy = { genre: sortOrder === 'asc' ? 'asc' : 'desc' };
+        break;
+      case 'createdAt':
+      default:
+        orderBy = { createdAt: sortOrder === 'asc' ? 'asc' : 'desc' };
+        break;
+    }
+
+    // Get total count for pagination
+    const total = await prisma.preset.count({ where });
+
+    // Get presets with pagination
+    const presets = await prisma.preset.findMany({
+      where,
       include: {
         user: {
           select: {
@@ -44,13 +113,25 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: [
-        { folder: 'asc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy,
+      skip: (page - 1) * limit,
+      take: limit,
     });
 
-    return NextResponse.json({ presets }, { status: 200 });
+    const totalPages = Math.ceil(total / limit);
+
+    return NextResponse.json(
+      {
+        presets,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages,
+        },
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('Get presets error:', error);
     return NextResponse.json(
@@ -94,7 +175,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, settings, isPublic, folder } = body;
+    const { name, settings, isPublic, folder, genre } = body;
 
     // Validasi input
     if (!name || !settings) {
@@ -115,6 +196,7 @@ export async function POST(request: NextRequest) {
     // Sanitize input
     const sanitizedName = sanitizePresetName(name);
     const sanitizedFolder = sanitizeFolderName(folder);
+    const sanitizedGenre = sanitizeGenreName(genre);
 
     if (!sanitizedName || sanitizedName.length === 0) {
       return NextResponse.json(
@@ -147,6 +229,7 @@ export async function POST(request: NextRequest) {
         settings: settings,
         isPublic: isPublic === true,
         folder: sanitizedFolder,
+        genre: sanitizedGenre,
       },
       include: {
         user: {
