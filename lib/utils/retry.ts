@@ -31,7 +31,7 @@ function calculateDelay(attempt: number, options: Required<RetryOptions>): numbe
 /**
  * Mengecek apakah error dapat di-retry
  */
-function isRetryable(error: unknown, response?: Response, options: Required<RetryOptions>): boolean {
+function isRetryable(error: unknown, options: Required<RetryOptions>, response?: Response): boolean {
   // Cek status code
   if (response) {
     if (options.retryableStatuses.includes(response.status)) {
@@ -90,7 +90,7 @@ export async function retryWithBackoff<T>(
       }
 
       // Cek apakah error dapat di-retry
-      if (!isRetryable(error, lastResponse, opts)) {
+      if (!isRetryable(error, opts, lastResponse)) {
         throw error;
       }
 
@@ -130,11 +130,10 @@ export async function fetchWithRetry(
     const response = await fetch(url, options);
     
     // Jika response tidak OK dan retryable, throw response untuk di-retry
-    if (!response.ok && isRetryable(null, response, { ...DEFAULT_OPTIONS, ...retryOptions })) {
+    if (!response.ok && isRetryable(null, { ...DEFAULT_OPTIONS, ...retryOptions }, response)) {
       throw response;
     }
     
     return response;
   }, retryOptions);
 }
-

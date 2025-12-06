@@ -29,6 +29,7 @@ export type PresetMinAggregateOutputType = {
   name: string | null
   userId: string | null
   folder: string | null
+  genre: string | null
   isPublic: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -39,6 +40,7 @@ export type PresetMaxAggregateOutputType = {
   name: string | null
   userId: string | null
   folder: string | null
+  genre: string | null
   isPublic: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -49,6 +51,7 @@ export type PresetCountAggregateOutputType = {
   name: number
   userId: number
   folder: number
+  genre: number
   isPublic: number
   settings: number
   createdAt: number
@@ -62,6 +65,7 @@ export type PresetMinAggregateInputType = {
   name?: true
   userId?: true
   folder?: true
+  genre?: true
   isPublic?: true
   createdAt?: true
   updatedAt?: true
@@ -72,6 +76,7 @@ export type PresetMaxAggregateInputType = {
   name?: true
   userId?: true
   folder?: true
+  genre?: true
   isPublic?: true
   createdAt?: true
   updatedAt?: true
@@ -82,6 +87,7 @@ export type PresetCountAggregateInputType = {
   name?: true
   userId?: true
   folder?: true
+  genre?: true
   isPublic?: true
   settings?: true
   createdAt?: true
@@ -166,6 +172,7 @@ export type PresetGroupByOutputType = {
   name: string
   userId: string
   folder: string | null
+  genre: string | null
   isPublic: boolean
   settings: runtime.JsonValue
   createdAt: Date
@@ -198,6 +205,7 @@ export type PresetWhereInput = {
   name?: Prisma.StringFilter<"Preset"> | string
   userId?: Prisma.StringFilter<"Preset"> | string
   folder?: Prisma.StringNullableFilter<"Preset"> | string | null
+  genre?: Prisma.StringNullableFilter<"Preset"> | string | null
   isPublic?: Prisma.BoolFilter<"Preset"> | boolean
   settings?: Prisma.JsonFilter<"Preset">
   createdAt?: Prisma.DateTimeFilter<"Preset"> | Date | string
@@ -210,6 +218,7 @@ export type PresetOrderByWithRelationInput = {
   name?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   folder?: Prisma.SortOrderInput | Prisma.SortOrder
+  genre?: Prisma.SortOrderInput | Prisma.SortOrder
   isPublic?: Prisma.SortOrder
   settings?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -225,6 +234,7 @@ export type PresetWhereUniqueInput = Prisma.AtLeast<{
   name?: Prisma.StringFilter<"Preset"> | string
   userId?: Prisma.StringFilter<"Preset"> | string
   folder?: Prisma.StringNullableFilter<"Preset"> | string | null
+  genre?: Prisma.StringNullableFilter<"Preset"> | string | null
   isPublic?: Prisma.BoolFilter<"Preset"> | boolean
   settings?: Prisma.JsonFilter<"Preset">
   createdAt?: Prisma.DateTimeFilter<"Preset"> | Date | string
@@ -237,6 +247,7 @@ export type PresetOrderByWithAggregationInput = {
   name?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   folder?: Prisma.SortOrderInput | Prisma.SortOrder
+  genre?: Prisma.SortOrderInput | Prisma.SortOrder
   isPublic?: Prisma.SortOrder
   settings?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -254,6 +265,7 @@ export type PresetScalarWhereWithAggregatesInput = {
   name?: Prisma.StringWithAggregatesFilter<"Preset"> | string
   userId?: Prisma.StringWithAggregatesFilter<"Preset"> | string
   folder?: Prisma.StringNullableWithAggregatesFilter<"Preset"> | string | null
+  genre?: Prisma.StringNullableWithAggregatesFilter<"Preset"> | string | null
   isPublic?: Prisma.BoolWithAggregatesFilter<"Preset"> | boolean
   settings?: Prisma.JsonWithAggregatesFilter<"Preset">
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Preset"> | Date | string
@@ -264,6 +276,7 @@ export type PresetCreateInput = {
   id?: string
   name: string
   folder?: string | null
+  genre?: string | null
   isPublic?: boolean
   settings: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
@@ -276,6 +289,7 @@ export type PresetUncheckedCreateInput = {
   name: string
   userId: string
   folder?: string | null
+  genre?: string | null
   isPublic?: boolean
   settings: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
@@ -286,6 +300,7 @@ export type PresetUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   folder?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  genre?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   settings?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -298,6 +313,7 @@ export type PresetUncheckedUpdateInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   folder?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  genre?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   settings?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -309,6 +325,7 @@ export type PresetCreateManyInput = {
   name: string
   userId: string
   folder?: string | null
+  genre?: string | null
   isPublic?: boolean
   settings: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
@@ -319,6 +336,7 @@ export type PresetUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   folder?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  genre?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   settings?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -330,6 +348,7 @@ export type PresetUncheckedUpdateManyInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   folder?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  genre?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   settings?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -351,6 +370,7 @@ export type PresetCountOrderByAggregateInput = {
   name?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   folder?: Prisma.SortOrder
+  genre?: Prisma.SortOrder
   isPublic?: Prisma.SortOrder
   settings?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -362,6 +382,7 @@ export type PresetMaxOrderByAggregateInput = {
   name?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   folder?: Prisma.SortOrder
+  genre?: Prisma.SortOrder
   isPublic?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -372,6 +393,7 @@ export type PresetMinOrderByAggregateInput = {
   name?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   folder?: Prisma.SortOrder
+  genre?: Prisma.SortOrder
   isPublic?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -427,6 +449,7 @@ export type PresetCreateWithoutUserInput = {
   id?: string
   name: string
   folder?: string | null
+  genre?: string | null
   isPublic?: boolean
   settings: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
@@ -437,6 +460,7 @@ export type PresetUncheckedCreateWithoutUserInput = {
   id?: string
   name: string
   folder?: string | null
+  genre?: string | null
   isPublic?: boolean
   settings: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
@@ -477,6 +501,7 @@ export type PresetScalarWhereInput = {
   name?: Prisma.StringFilter<"Preset"> | string
   userId?: Prisma.StringFilter<"Preset"> | string
   folder?: Prisma.StringNullableFilter<"Preset"> | string | null
+  genre?: Prisma.StringNullableFilter<"Preset"> | string | null
   isPublic?: Prisma.BoolFilter<"Preset"> | boolean
   settings?: Prisma.JsonFilter<"Preset">
   createdAt?: Prisma.DateTimeFilter<"Preset"> | Date | string
@@ -487,6 +512,7 @@ export type PresetCreateManyUserInput = {
   id?: string
   name: string
   folder?: string | null
+  genre?: string | null
   isPublic?: boolean
   settings: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
@@ -497,6 +523,7 @@ export type PresetUpdateWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   folder?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  genre?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   settings?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -507,6 +534,7 @@ export type PresetUncheckedUpdateWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   folder?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  genre?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   settings?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -517,6 +545,7 @@ export type PresetUncheckedUpdateManyWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   folder?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  genre?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   settings?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -530,6 +559,7 @@ export type PresetSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   name?: boolean
   userId?: boolean
   folder?: boolean
+  genre?: boolean
   isPublic?: boolean
   settings?: boolean
   createdAt?: boolean
@@ -542,6 +572,7 @@ export type PresetSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   name?: boolean
   userId?: boolean
   folder?: boolean
+  genre?: boolean
   isPublic?: boolean
   settings?: boolean
   createdAt?: boolean
@@ -554,6 +585,7 @@ export type PresetSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   name?: boolean
   userId?: boolean
   folder?: boolean
+  genre?: boolean
   isPublic?: boolean
   settings?: boolean
   createdAt?: boolean
@@ -566,13 +598,14 @@ export type PresetSelectScalar = {
   name?: boolean
   userId?: boolean
   folder?: boolean
+  genre?: boolean
   isPublic?: boolean
   settings?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type PresetOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "userId" | "folder" | "isPublic" | "settings" | "createdAt" | "updatedAt", ExtArgs["result"]["preset"]>
+export type PresetOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "userId" | "folder" | "genre" | "isPublic" | "settings" | "createdAt" | "updatedAt", ExtArgs["result"]["preset"]>
 export type PresetInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
@@ -593,6 +626,7 @@ export type $PresetPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
     name: string
     userId: string
     folder: string | null
+    genre: string | null
     isPublic: boolean
     settings: runtime.JsonValue
     createdAt: Date
@@ -1025,6 +1059,7 @@ export interface PresetFieldRefs {
   readonly name: Prisma.FieldRef<"Preset", 'String'>
   readonly userId: Prisma.FieldRef<"Preset", 'String'>
   readonly folder: Prisma.FieldRef<"Preset", 'String'>
+  readonly genre: Prisma.FieldRef<"Preset", 'String'>
   readonly isPublic: Prisma.FieldRef<"Preset", 'Boolean'>
   readonly settings: Prisma.FieldRef<"Preset", 'Json'>
   readonly createdAt: Prisma.FieldRef<"Preset", 'DateTime'>

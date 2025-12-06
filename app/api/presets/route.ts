@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { sanitizePresetName, sanitizeFolderName, sanitizeGenreName } from '@/lib/validation';
 import { verifyCSRFToken } from '@/lib/csrf';
-import { Prisma } from '@prisma/client';
+import type { PresetWhereInput, PresetOrderByWithRelationInput } from '@/generated/models/Preset';
 
 /**
  * GET /api/presets
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
     // Build where clause
-    const whereConditions: Prisma.PresetWhereInput[] = [
+    const whereConditions: PresetWhereInput[] = [
       {
         OR: [
           { userId: payload.userId }, // User's own presets
@@ -77,12 +77,12 @@ export async function GET(request: NextRequest) {
       whereConditions.push({ isPublic: isPublicFilter === 'true' });
     }
 
-    const where: Prisma.PresetWhereInput = {
+    const where: PresetWhereInput = {
       AND: whereConditions,
     };
 
     // Build orderBy
-    let orderBy: Prisma.PresetOrderByWithRelationInput;
+    let orderBy: PresetOrderByWithRelationInput;
     switch (sortBy) {
       case 'name':
         orderBy = { name: sortOrder === 'asc' ? 'asc' : 'desc' };
@@ -263,4 +263,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
