@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/auth';
 import { sanitizePresetName, sanitizeFolderName, sanitizeGenreName } from '@/lib/validation';
 import { verifyCSRFToken } from '@/lib/csrf';
 import type { PresetWhereInput, PresetOrderByWithRelationInput } from '@/generated/models/Preset';
+const PRESET_GENRE_ENABLED = process.env.PRESET_GENRE_ENABLED === 'true';
 
 /**
  * GET /api/presets
@@ -53,13 +54,14 @@ export async function GET(request: NextRequest) {
 
     // Add search filter
     if (searchQuery) {
-      whereConditions.push({
-        OR: [
-          { name: { contains: searchQuery, mode: 'insensitive' } },
-          { folder: { contains: searchQuery, mode: 'insensitive' } },
-          { genre: { contains: searchQuery, mode: 'insensitive' } },
-        ],
-      });
+      const searchOr: PresetWhereInput[] = [
+        { name: { contains: searchQuery, mode: 'insensitive' } },
+        { folder: { contains: searchQuery, mode: 'insensitive' } },
+      ];
+      if (PRESET_GENRE_ENABLED) {
+        searchOr.push({ genre: { contains: searchQuery, mode: 'insensitive' } });
+      }
+      whereConditions.push({ OR: searchOr });
     }
 
     // Add folder filter
@@ -68,7 +70,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Add genre filter
-    if (genreFilter) {
+    if (genreFilter && PRESET_GENRE_ENABLED) {
       whereConditions.push({ genre: genreFilter });
     }
 
@@ -91,7 +93,9 @@ export async function GET(request: NextRequest) {
         orderBy = { folder: sortOrder === 'asc' ? 'asc' : 'desc' };
         break;
       case 'genre':
-        orderBy = { genre: sortOrder === 'asc' ? 'asc' : 'desc' };
+        orderBy = PRESET_GENRE_ENABLED
+          ? { genre: sortOrder === 'asc' ? 'asc' : 'desc' }
+          : { createdAt: sortOrder === 'asc' ? 'asc' : 'desc' };
         break;
       case 'createdAt':
       default:
