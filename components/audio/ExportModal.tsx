@@ -26,7 +26,7 @@ export function ExportModal({ isOpen, onClose, onExport }: ExportModalProps) {
       onClose();
     } catch (error) {
       console.error('Export error:', error);
-      alert('Failed to export audio. Please try again.');
+      // Error sudah di-handle oleh parent component dengan toast
     } finally {
       setIsExporting(false);
     }

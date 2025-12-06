@@ -881,7 +881,7 @@ export function AudioMasteringPlugin() {
         }
         
         // Check if user has seen latest changelog
-        const CHANGELOG_VERSION = 'v2.1.0'; // Update this when adding new features
+        const CHANGELOG_VERSION = 'v2.2.0'; // Update this when adding new features
         const CHANGELOG_STORAGE_KEY = 'CHANGELOG_VIEWED';
         const lastViewedVersion = window.localStorage.getItem(CHANGELOG_STORAGE_KEY);
         if (lastViewedVersion !== CHANGELOG_VERSION) {
@@ -1449,7 +1449,7 @@ export function AudioMasteringPlugin() {
           </div>
 
           {/* Playback Controls - Fixed Position (tidak ikut scroll) */}
-          <div className="fixed -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-800/95 rounded-xl p-3 border border-zinc-700 flex items-center justify-center z-50 backdrop-blur-md shadow-2xl">
+          <div className="fixed bottom-4 md:-bottom-2 left-1/2 -translate-x-1/2 bg-zinc-800/95 rounded-xl p-3 border border-zinc-700 flex items-center justify-center z-50 backdrop-blur-md shadow-2xl">
             <div className="flex items-center gap-3">
               {/* Previous Button */}
               <button 
@@ -1517,7 +1517,7 @@ export function AudioMasteringPlugin() {
         </div>
 
         {/* Right Column - Processing Controls */}
-        <div className="col-span-12 md:col-span-3 space-y-4">
+        <div className="col-span-12 md:col-span-3 space-y-4 pb-24 md:pb-0">
           {/* Compressor */}
           <div className={`bg-zinc-800/50 rounded-xl p-4 border ${compressorEnabled ? 'border-zinc-700' : 'border-zinc-800 opacity-60'}`}>
             <div className="flex items-center justify-between mb-4">
@@ -2258,27 +2258,18 @@ export function AudioMasteringPlugin() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirmModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-zinc-800 rounded-xl p-6 w-full max-w-md border border-zinc-700">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-800 rounded-xl p-6 w-full max-w-md border border-zinc-700 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-red-900/30 p-2 rounded-lg">
                 <Trash2 className="w-6 h-6 text-red-400" />
               </div>
               <h2 className="text-zinc-100 text-xl font-semibold">Hapus Preset</h2>
             </div>
-            <p className="text-zinc-300 mb-2">
-              Apakah Anda yakin ingin menghapus preset <span className="font-semibold text-zinc-100">&quot;{deletingPresetName}&quot;</span>?
-            </p>
-            <p className="text-zinc-500 text-sm mb-6">
-              Tindakan ini tidak dapat dibatalkan. Preset akan dihapus secara permanen.
+            <p className="text-zinc-300 mb-6 text-center">
+              Apakah Anda yakin ingin menghapus 1 preset? Tindakan ini tidak dapat dibatalkan.
             </p>
             <div className="flex gap-2">
-              <button
-                onClick={handleConfirmDelete}
-                className="flex-1 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition-colors font-medium"
-              >
-                Ya, Hapus
-              </button>
               <button
                 onClick={() => {
                   setShowDeleteConfirmModal(false);
@@ -2288,6 +2279,12 @@ export function AudioMasteringPlugin() {
                 className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors"
               >
                 Batal
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+              >
+                Ya, Hapus
               </button>
             </div>
           </div>
@@ -2347,7 +2344,7 @@ export function AudioMasteringPlugin() {
                   setShowChangelog(false);
                   try {
                     if (typeof window !== 'undefined') {
-                      window.localStorage.setItem('CHANGELOG_VIEWED', 'v2.1.0');
+                      window.localStorage.setItem('CHANGELOG_VIEWED', 'v2.2.0');
                     }
                   } catch {
                     // Ignore storage errors
@@ -2360,64 +2357,63 @@ export function AudioMasteringPlugin() {
             </div>
 
             <div className="space-y-4">
-              <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
-                <h3 className="text-blue-400 font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-lg">📁</span> Preset Management dengan Folder
+              <div className="bg-cyan-900/20 border border-cyan-700/50 rounded-lg p-4">
+                <h3 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-lg">🔔</span> Sistem Toast Notifikasi Baru
                 </h3>
                 <p className="text-zinc-300 text-sm leading-relaxed mb-2">
-                  Sekarang Anda dapat mengorganisir preset dengan folder! Setiap user memiliki folder sendiri untuk mengelompokkan preset mereka.
+                  Semua notifikasi sekarang menggunakan sistem toast yang modern dan konsisten! Tidak ada lagi popup alert yang mengganggu.
                 </p>
                 <ul className="text-zinc-300 text-sm space-y-1 ml-4 list-disc">
-                  <li>Buat folder untuk mengorganisir preset Anda</li>
-                  <li>Preset ditampilkan berdasarkan folder di dropdown</li>
-                  <li>Setiap user hanya bisa mengelola preset mereka sendiri</li>
-                </ul>
-              </div>
-
-              <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4">
-                <h3 className="text-green-400 font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-lg">✏️</span> CRUD Lengkap untuk Preset
-                </h3>
-                <p className="text-zinc-300 text-sm leading-relaxed mb-2">
-                  Sekarang Anda memiliki kontrol penuh atas preset Anda:
-                </p>
-                <ul className="text-zinc-300 text-sm space-y-1 ml-4 list-disc">
-                  <li><span className="font-semibold">Create</span> - Simpan preset dengan folder</li>
-                  <li><span className="font-semibold">Read</span> - Lihat preset yang terorganisir per folder</li>
-                  <li><span className="font-semibold">Update</span> - Edit preset dan folder dengan tombol Edit</li>
-                  <li><span className="font-semibold">Delete</span> - Hapus preset dengan konfirmasi yang jelas</li>
+                  <li>Notifikasi muncul di pojok kanan atas dengan animasi halus</li>
+                  <li>Auto-hide setelah beberapa detik</li>
+                  <li>Tiga jenis notifikasi: Success (hijau), Error (merah), Info (cyan)</li>
+                  <li>Dapat ditutup manual dengan tombol X</li>
                 </ul>
               </div>
 
               <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-4">
                 <h3 className="text-red-400 font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-lg">🗑️</span> Modal Konfirmasi Delete yang Lebih Baik
+                  <span className="text-lg">🗑️</span> Modal Konfirmasi yang Lebih Baik
                 </h3>
-                <p className="text-zinc-300 text-sm leading-relaxed">
-                  Hapus preset sekarang lebih aman dengan modal konfirmasi yang jelas. Anda akan melihat nama preset yang akan dihapus dan peringatan bahwa tindakan ini tidak dapat dibatalkan.
+                <p className="text-zinc-300 text-sm leading-relaxed mb-2">
+                  Semua aksi penting sekarang memiliki modal konfirmasi yang jelas dan aman:
                 </p>
+                <ul className="text-zinc-300 text-sm space-y-1 ml-4 list-disc">
+                  <li>Modal konfirmasi untuk menghapus preset dengan pesan yang jelas</li>
+                  <li>Modal konfirmasi untuk menghapus folder dengan 2 opsi: hapus atau pindahkan</li>
+                  <li>Modal input untuk rename folder (tidak lagi menggunakan prompt)</li>
+                  <li>Semua modal memiliki desain yang konsisten dan responsif</li>
+                </ul>
               </div>
 
-              <div className="bg-cyan-900/20 border border-cyan-700/50 rounded-lg p-4">
-                <h3 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-lg">✨</span> Master Bypass Feature
+              <div className="bg-purple-900/20 border border-purple-700/50 rounded-lg p-4">
+                <h3 className="text-purple-400 font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-lg">📱</span> Perbaikan Layout Mobile
                 </h3>
-                <p className="text-zinc-300 text-sm leading-relaxed">
-                  Compare your audio before and after mastering in real-time! Click the <span className="font-semibold text-cyan-400">ON/OFF button</span> above the waveform to switch between original (Bypass) and mastered (ON) audio instantly.
+                <p className="text-zinc-300 text-sm leading-relaxed mb-2">
+                  Pengalaman mobile yang lebih baik dengan layout yang dioptimalkan:
                 </p>
+                <ul className="text-zinc-300 text-sm space-y-1 ml-4 list-disc">
+                  <li>Kontrol stereo tidak lagi tertutup oleh fixed playback controls</li>
+                  <li>Fixed controls diposisikan lebih baik di mobile</li>
+                  <li>Padding bottom yang cukup untuk konten di mobile</li>
+                  <li>Semua modal responsif dan mudah digunakan di layar kecil</li>
+                </ul>
               </div>
 
               <div className="bg-emerald-900/20 border border-emerald-700/50 rounded-lg p-4">
                 <h3 className="text-emerald-400 font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-lg">🎵</span> Enhanced Export Options
+                  <span className="text-lg">✨</span> Perbaikan UX di Semua Halaman
                 </h3>
-                <p className="text-zinc-300 text-sm leading-relaxed">
-                  Export your mastered audio in multiple formats:
+                <p className="text-zinc-300 text-sm leading-relaxed mb-2">
+                  Peningkatan pengalaman pengguna di seluruh aplikasi:
                 </p>
-                <ul className="text-zinc-300 text-sm mt-2 space-y-1 ml-4 list-disc">
-                  <li><span className="font-semibold">MP3</span> - High quality 320 kbps</li>
-                  <li><span className="font-semibold">FLAC</span> - Lossless audio format</li>
-                  <li><span className="font-semibold">WAV</span> - Multiple quality options (16-bit, 24-bit, 32-bit)</li>
+                <ul className="text-zinc-300 text-sm space-y-1 ml-4 list-disc">
+                  <li>Toast notifications di halaman Documentation dan Support</li>
+                  <li>Copy to clipboard menggunakan toast bukan alert</li>
+                  <li>Form submission feedback menggunakan toast</li>
+                  <li>Semua error handling menggunakan toast yang informatif</li>
                 </ul>
               </div>
             </div>
@@ -2428,7 +2424,7 @@ export function AudioMasteringPlugin() {
                   setShowChangelog(false);
                   try {
                     if (typeof window !== 'undefined') {
-                      window.localStorage.setItem('CHANGELOG_VIEWED', 'v2.1.0');
+                      window.localStorage.setItem('CHANGELOG_VIEWED', 'v2.2.0');
                     }
                   } catch {
                     // Ignore storage errors

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { 
   ArrowLeft,
   HelpCircle,
@@ -20,6 +20,7 @@ import {
   Globe,
   Github
 } from 'lucide-react';
+import { ToastContainer, type Toast } from '@/components/ui/Toast';
 
 interface SupportPageProps {
   onBack: () => void;
@@ -34,6 +35,16 @@ export function SupportPage({ onBack, onGetStarted }: SupportPageProps) {
     subject: '',
     message: ''
   });
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = useCallback((message: string, type: Toast['type'] = 'success') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts(prev => [...prev, { id, message, type }]);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  }, []);
 
   const faqs = [
     {
@@ -82,7 +93,7 @@ export function SupportPage({ onBack, onGetStarted }: SupportPageProps) {
     e.preventDefault();
     console.log('Support form submitted:', formData);
     // Here you would send the form data to your backend
-    alert('Thank you for contacting us! We\'ll get back to you within 24 hours.');
+    showToast('Thank you for contacting us! We\'ll get back to you within 24 hours.', 'success');
     setFormData({ name: '', email: '', subject: '', message: '' });
   };
 
@@ -542,6 +553,7 @@ export function SupportPage({ onBack, onGetStarted }: SupportPageProps) {
           </motion.button>
         </div>
       </div>
+      <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
   );
 }

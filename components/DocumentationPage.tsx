@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { 
   ArrowLeft,
   BookOpen,
@@ -24,6 +24,7 @@ import {
   CheckCircle,
   Copy
 } from 'lucide-react';
+import { ToastContainer, type Toast } from '@/components/ui/Toast';
 
 interface DocumentationPageProps {
   onBack: () => void;
@@ -33,6 +34,16 @@ interface DocumentationPageProps {
 export function DocumentationPage({ onBack, onGetStarted }: DocumentationPageProps) {
   const [activeSection, setActiveSection] = useState('getting-started');
   const [searchQuery, setSearchQuery] = useState('');
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = useCallback((message: string, type: Toast['type'] = 'success') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts(prev => [...prev, { id, message, type }]);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  }, []);
 
   const menuItems = [
     { id: 'getting-started', icon: Home, label: 'Getting Started', color: 'cyan' },
@@ -47,7 +58,7 @@ export function DocumentationPage({ onBack, onGetStarted }: DocumentationPagePro
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert('Copied to clipboard!');
+    showToast('Copied to clipboard!', 'success');
   };
 
   return (
@@ -788,6 +799,7 @@ export function DocumentationPage({ onBack, onGetStarted }: DocumentationPagePro
           </div>
         </div>
       </div>
+      <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
   );
 }

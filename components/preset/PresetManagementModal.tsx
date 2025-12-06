@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getUniqueFolders, getUniqueGenres, formatDate, type SortField, type SortOrder } from '@/lib/utils/presetUtils';
 import { fetchWithCSRF } from '@/lib/apiClient';
 import { useDebounce } from '@/hooks/useDebounce';
+import { ToastContainer, type Toast } from '@/components/ui/Toast';
 
 interface PresetManagementModalProps {
   isOpen: boolean;
@@ -38,11 +39,29 @@ export function PresetManagementModal({ isOpen, onClose, onSelectPreset, onEditP
   // State untuk bulk selection
   const [selectedPresetIds, setSelectedPresetIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   
   // State untuk folder management
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [deletingFolder, setDeletingFolder] = useState<string | null>(null);
+  const [showFolderDeleteModal, setShowFolderDeleteModal] = useState(false);
+  const [folderToDelete, setFolderToDelete] = useState<string | null>(null);
+  const [showRenameFolderModal, setShowRenameFolderModal] = useState(false);
+  const [folderToRename, setFolderToRename] = useState<string | null>(null);
+  const [newFolderNameInput, setNewFolderNameInput] = useState('');
+
+  // Toast notifications
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = useCallback((message: string, type: Toast['type'] = 'success') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts(prev => [...prev, { id, message, type }]);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  }, []);
 
   // Filter presets berdasarkan user (hanya preset milik user)
   const myPresets = useMemo(() => {
@@ -164,54 +183,80 @@ export function PresetManagementModal({ isOpen, onClose, onSelectPreset, onEditP
     }
   }, [selectedPresetIds.size, paginatedPresets]);
 
-  // Handle bulk delete
-  const handleBulkDelete = useCallback(async () => {
+  // Handle bulk delete - show confirmation modal
+  const handleBulkDeleteClick = useCallback(() => {
     if (selectedPresetIds.size === 0) return;
+    setShowDeleteConfirmModal(true);
+  }, [selectedPresetIds.size]);
 
-    const confirmMessage = `Apakah Anda yakin ingin menghapus ${selectedPresetIds.size} preset? Tindakan ini tidak dapat dibatalkan.`;
-    if (!confirm(confirmMessage)) return;
+  // Handle confirmed bulk delete
+  const handleConfirmBulkDelete = useCallback(async () => {
+    if (selectedPresetIds.size === 0) return;
 
     setIsDeleting(true);
     try {
       await bulkDeletePresets(Array.from(selectedPresetIds));
       setSelectedPresetIds(new Set());
       setCurrentPage(1);
+      setShowDeleteConfirmModal(false);
+      showToast(`Berhasil menghapus ${selectedPresetIds.size} preset`, 'success');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Gagal menghapus preset');
+      showToast(err instanceof Error ? err.message : 'Gagal menghapus preset', 'error');
     } finally {
       setIsDeleting(false);
     }
-  }, [selectedPresetIds, bulkDeletePresets]);
+  }, [selectedPresetIds, bulkDeletePresets, showToast]);
 
-  // Handle folder rename
-  const handleRenameFolder = useCallback(async (oldFolder: string) => {
-    const newName = prompt(`Ubah nama folder "${oldFolder}" menjadi:`, oldFolder);
-    if (!newName || newName.trim() === oldFolder) return;
+  // Handle folder rename - show modal
+  const handleRenameFolderClick = useCallback((oldFolder: string) => {
+    setFolderToRename(oldFolder);
+    setNewFolderNameInput(oldFolder);
+    setShowRenameFolderModal(true);
+  }, []);
+
+  // Handle confirmed folder rename
+  const handleConfirmRenameFolder = useCallback(async () => {
+    if (!folderToRename || !newFolderNameInput.trim() || newFolderNameInput.trim() === folderToRename) {
+      return;
+    }
 
     try {
-      await renameFolder(oldFolder, newName.trim());
+      await renameFolder(folderToRename, newFolderNameInput.trim());
       setRenamingFolder(null);
       setNewFolderName('');
+      setShowRenameFolderModal(false);
+      setFolderToRename(null);
+      setNewFolderNameInput('');
+      showToast(`Folder "${folderToRename}" berhasil diubah menjadi "${newFolderNameInput.trim()}"`, 'success');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Gagal mengubah nama folder');
+      showToast(err instanceof Error ? err.message : 'Gagal mengubah nama folder', 'error');
     }
-  }, [renameFolder]);
+  }, [folderToRename, newFolderNameInput, renameFolder, showToast]);
 
-  // Handle folder delete
-  const handleDeleteFolder = useCallback(async (folder: string) => {
-    const action = confirm(
-      `Hapus folder "${folder}"?\n\n` +
-      `Klik OK untuk menghapus semua preset di folder.\n` +
-      `Klik Cancel untuk memindahkan preset ke "No Folder".`
-    );
+  // Handle folder delete - show modal
+  const handleDeleteFolderClick = useCallback((folder: string) => {
+    setFolderToDelete(folder);
+    setShowFolderDeleteModal(true);
+  }, []);
+
+  // Handle confirmed folder delete
+  const handleConfirmFolderDelete = useCallback(async (action: 'delete' | 'move') => {
+    if (!folderToDelete) return;
 
     try {
-      await deleteFolder(folder, action ? 'delete' : 'move');
+      await deleteFolder(folderToDelete, action);
       setDeletingFolder(null);
+      setShowFolderDeleteModal(false);
+      setFolderToDelete(null);
+      if (action === 'delete') {
+        showToast(`Folder "${folderToDelete}" dan semua preset di dalamnya berhasil dihapus`, 'success');
+      } else {
+        showToast(`Preset di folder "${folderToDelete}" berhasil dipindahkan ke "No Folder"`, 'success');
+      }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Gagal menghapus folder');
+      showToast(err instanceof Error ? err.message : 'Gagal menghapus folder', 'error');
     }
-  }, [deleteFolder]);
+  }, [folderToDelete, deleteFolder, showToast]);
 
   // Reset filters
   const resetFilters = useCallback(() => {
@@ -315,7 +360,7 @@ export function PresetManagementModal({ isOpen, onClose, onSelectPreset, onEditP
               {selectedPresetIds.size} preset dipilih
             </span>
             <button
-              onClick={handleBulkDelete}
+              onClick={handleBulkDeleteClick}
               disabled={isDeleting}
               className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
@@ -528,6 +573,136 @@ export function PresetManagementModal({ isOpen, onClose, onSelectPreset, onEditP
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirmModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-zinc-800 rounded-xl p-6 w-full max-w-md border border-zinc-700 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-red-900/30 p-2 rounded-lg">
+                <Trash2 className="w-6 h-6 text-red-400" />
+              </div>
+              <h2 className="text-zinc-100 text-xl font-semibold">Hapus Preset</h2>
+            </div>
+            <p className="text-zinc-300 mb-6 text-center">
+              Apakah Anda yakin ingin menghapus {selectedPresetIds.size === 1 ? '1 preset' : `${selectedPresetIds.size} preset`}? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleteConfirmModal(false)}
+                className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirmBulkDelete}
+                disabled={isDeleting}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeleting ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Folder Rename Modal */}
+      {showRenameFolderModal && folderToRename && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-zinc-800 rounded-xl p-6 w-full max-w-md border border-zinc-700 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-cyan-900/30 p-2 rounded-lg">
+                <Edit className="w-6 h-6 text-cyan-400" />
+              </div>
+              <h2 className="text-zinc-100 text-xl font-semibold">Ubah Nama Folder</h2>
+            </div>
+            <p className="text-zinc-300 mb-4">
+              Ubah nama folder <span className="font-semibold text-zinc-100">&quot;{folderToRename}&quot;</span>
+            </p>
+            <div className="mb-6">
+              <label className="block text-sm text-zinc-400 mb-2">Nama Baru</label>
+              <input
+                type="text"
+                value={newFolderNameInput}
+                onChange={(e) => setNewFolderNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleConfirmRenameFolder();
+                  }
+                }}
+                className="w-full bg-zinc-700 text-zinc-100 px-4 py-2 rounded-lg border border-zinc-600 focus:outline-none focus:border-cyan-500"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowRenameFolderModal(false);
+                  setFolderToRename(null);
+                  setNewFolderNameInput('');
+                }}
+                className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirmRenameFolder}
+                disabled={!newFolderNameInput.trim() || newFolderNameInput.trim() === folderToRename}
+                className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Folder Delete Confirmation Modal */}
+      {showFolderDeleteModal && folderToDelete && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-zinc-800 rounded-xl p-6 w-full max-w-md border border-zinc-700 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-red-900/30 p-2 rounded-lg">
+                <Trash2 className="w-6 h-6 text-red-400" />
+              </div>
+              <h2 className="text-zinc-100 text-xl font-semibold">Hapus Folder</h2>
+            </div>
+            <p className="text-zinc-300 mb-2">
+              Folder <span className="font-semibold text-zinc-100">&quot;{folderToDelete}&quot;</span> akan dihapus.
+            </p>
+            <p className="text-zinc-500 text-sm mb-6">
+              Pilih aksi yang ingin dilakukan:
+            </p>
+            <div className="space-y-2 mb-6">
+              <button
+                onClick={() => handleConfirmFolderDelete('delete')}
+                className="w-full bg-red-600 hover:bg-red-500 text-white px-4 py-3 rounded-lg transition-colors font-medium text-left"
+              >
+                <div className="font-semibold">Hapus Folder dan Semua Preset</div>
+                <div className="text-sm opacity-90">Semua preset di folder ini akan dihapus permanen</div>
+              </button>
+              <button
+                onClick={() => handleConfirmFolderDelete('move')}
+                className="w-full bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-3 rounded-lg transition-colors text-left"
+              >
+                <div className="font-semibold">Pindahkan Preset ke &quot;No Folder&quot;</div>
+                <div className="text-sm opacity-90">Folder dihapus, preset tetap ada tanpa folder</div>
+              </button>
+            </div>
+            <button
+              onClick={() => {
+                setShowFolderDeleteModal(false);
+                setFolderToDelete(null);
+              }}
+              className="w-full bg-zinc-700 hover:bg-zinc-600 text-zinc-100 px-4 py-2 rounded-lg transition-colors"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
+
+      <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
   );
 }
