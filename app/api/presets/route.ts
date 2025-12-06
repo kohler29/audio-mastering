@@ -7,6 +7,69 @@ import type { PresetWhereInput, PresetOrderByWithRelationInput } from '@/generat
 const PRESET_GENRE_ENABLED = process.env.PRESET_GENRE_ENABLED === 'true';
 
 /**
+ * Mencari presets dengan fallback aman bila kolom pada DB tidak tersedia (P2022)
+ */
+async function findPresetsSafe(
+  where: PresetWhereInput,
+  orderBy: PresetOrderByWithRelationInput,
+  page: number,
+  limit: number,
+) {
+  try {
+    return await prisma.preset.findMany({
+      where,
+      include: {
+        user: {
+          select: { id: true, username: true },
+        },
+      },
+      orderBy,
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'P2022') {
+      // Fallback: gunakan createdAt untuk sorting
+      try {
+        return await prisma.preset.findMany({
+          where,
+          include: {
+            user: {
+              select: { id: true, username: true },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * limit,
+          take: limit,
+        });
+      } catch (error2) {
+        try {
+          // Fallback tanpa orderBy
+          return await prisma.preset.findMany({
+            where,
+            include: {
+              user: {
+                select: { id: true, username: true },
+              },
+            },
+            skip: (page - 1) * limit,
+            take: limit,
+          });
+        } catch (error3) {
+          // Fallback terakhir: tanpa include relasi
+          return await prisma.preset.findMany({
+            where,
+            skip: (page - 1) * limit,
+            take: limit,
+          });
+        }
+      }
+    }
+    throw error;
+  }
+}
+
+/**
  * GET /api/presets
  * Get all presets (user's own presets + published presets from others)
  * Supports pagination, search, filter, and sorting via query parameters
@@ -107,20 +170,7 @@ export async function GET(request: NextRequest) {
     const total = await prisma.preset.count({ where });
 
     // Get presets with pagination
-    const presets = await prisma.preset.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-          },
-        },
-      },
-      orderBy,
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const presets = await findPresetsSafe(where, orderBy, page, limit);
 
     const totalPages = Math.ceil(total / limit);
 
